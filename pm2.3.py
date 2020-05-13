@@ -4,6 +4,26 @@ import math
 import random
 
 """
+THIS IS A BIG UPDATE !
+got me 29.13 yesterday
+# I am not chasing in every cases anymore
+now i got 27.92
+# preferring a pack of coins to a single coin
+# preferring pack of coins to culsdesacs
+now i got 27.95
+# prefer if no coins, prefer to_explore to random
+# prefer the farest from my own pellets
+now i got?
+# no threat so i wont stay on place
+30.27
+SAME MODIFICATION TO THREAT
+29.67
+both back to SAME
+29.32
+repaired
+threat handling
+DAMN I HAD NO SAME HANDLING -_-
+
 """
 # Params
 """
@@ -19,6 +39,25 @@ PROCESS:
     - IF IT SUCKS WE GO RANDOM
     - it doesnt accelerate if it is aiming for a big coin or if nb of walls around not respected
 """
+POSS_RANGE = 3
+PREV_POINTS = 2
+
+BIG_PELLET_VALUE = 17
+PELLET_VALUE = 4
+PROGRESS_VALUE = 2
+EAT_VALUE = 18
+EXPLORATION_VALUE = 3
+
+# negatives
+CDS_DEBIT = 2
+FLEE = 40
+
+
+RANDOM_SENSITIVITY = 0
+
+# MODIFY_TO_SAME_PROBA = 0.4
+
+MIN_WALLS = 5
 
 # Init
 
@@ -199,6 +238,8 @@ for cell in available:
 
 
 # Dict Utils
+
+
 def duplicate_values(dico):
     rev_dict = {}
     for key, value in dico.items():
@@ -241,17 +282,6 @@ def modify_typ_to_same(pm):
         return "ROCK"
 
 # Actual Code
-
-
-"""
-######## #### ##       ######## ######## ########
-##        ##  ##          ##    ##       ##     ##
-##        ##  ##          ##    ##       ##     ##
-######    ##  ##          ##    ######   ########
-##        ##  ##          ##    ##       ##   ##
-##        ##  ##          ##    ##       ##    ##
-##       #### ########    ##    ######## ##     ##
-"""
 
 
 # THREATS LVLS
@@ -401,17 +431,6 @@ def get_closest(pos, to_explore):
     return res
 
 
-"""
- ######  ##     ##  #######   #######   ######  ########
-##    ## ##     ## ##     ## ##     ## ##    ## ##
-##       ##     ## ##     ## ##     ## ##       ##
-##       ######### ##     ## ##     ##  ######  ######
-##       ##     ## ##     ## ##     ##       ## ##
-##    ## ##     ## ##     ## ##     ## ##    ## ##
- ######  ##     ##  #######   #######   ######  ########
-"""
-
-
 # CHOOSING AMONGST THE 13 POSITIONS
 def choose_direction(pm):  # care not mess up with accessible vs available
     # simpler version of possible as a SET set()
@@ -532,6 +551,8 @@ def print_directives(my_pacmen, big_pellets):
                 f"MOVE {pm.id} {targets[pm.id].x} {targets[pm.id].y}")
     print("|".join(commands))
 
+#
+
 
 def assign_bp():
     closest_big_by_id = dict()
@@ -557,15 +578,8 @@ def assign_bp():
                     long_shot[pm.id] = coord
 
 
-"""
-##        #######   #######  ########
-##       ##     ## ##     ## ##     ##
-##       ##     ## ##     ## ##     ##
-##       ##     ## ##     ## ########
-##       ##     ## ##     ## ##
-##       ##     ## ##     ## ##
-########  #######   #######  ##
-"""
+# The Loop
+
 r = 0
 
 while True:
@@ -625,10 +639,9 @@ while True:
         remove_sight_from_explore(pm)
         remove_from_explore(pm)  # old implementation
         grid.add_cell(pm.pos.x, pm.pos.y, pm)
-    for e in [bp for bp in init_big_pellets if not bp in big_pellets]:
+    for e in [bp for bp in init_big_pellets if not bp in big_pellets]:  # 23h23 smells bad
         if e in to_explore:
             to_explore.remove(e)
-
 
 # ASSIGN BP
     if big_pellets:
@@ -643,13 +656,3 @@ while True:
     foe_pos_last_turn = set([foe.pos for foe in foe_pacmen])
 
     r += 1
-
-"""
-######## ##    ## ########
-##       ###   ## ##     ##
-##       ####  ## ##     ##
-######   ## ## ## ##     ##
-##       ##  #### ##     ##
-##       ##   ### ##     ##
-######## ##    ## ########
-"""
