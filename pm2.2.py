@@ -6,7 +6,7 @@ import random
 """
 THIS IS A BIG UPDATE !
 got me 29.13 yesterday
-#I am not chasing in every cases anymore
+# I am not chasing in every cases anymore
 now i got 27.92
 # preferring a pack of coins to a single coin
 # preferring pack of coins to culsdesacs
@@ -15,6 +15,11 @@ now i got 27.95
 # prefer the farest from my own pellets
 now i got?
 # no threat so i wont stay on place
+30.27
+SAME MODIFICATION TO THREAT
+29.67
+both back to SAME
+
 """
 # Params
 """
@@ -281,12 +286,7 @@ def filter_threat(pm, accessible):
         unit = grid.get_cell(foe_pos.x, foe_pos.y)
 # THREAT HANDLING
         if (eval(pm.typ) + 1) % 3 == eval(unit.typ):
-            if (dist(unit.pos, pm.pos) == 2 and unit.stl):  # it can eat me anyway
-                lst.append(RUN)
-                accessible.discard(unit.pos)
-                for i in around(unit.pos):
-                    accessible.discard(i)
-            elif dist(unit.pos, pm.pos) == 1:
+            if dist(unit.pos, pm.pos) == 1 or (dist(unit.pos, pm.pos) == 2 and unit.stl):
                 if pm.cld == 0 and unit.cld != 0:
                     lst.append(THREAT)
                 elif pm.cld == 0 and unit.cld == 0:
@@ -297,7 +297,20 @@ def filter_threat(pm, accessible):
                     accessible.discard(unit.pos)
                     for i in around(unit.pos):
                         accessible.discard(i)
+            elif (dist(unit.pos, pm.pos) == 3 and unit.stl):
+                lst.append(RUN)
+                accessible.discard(unit.pos)
+                for i in around(unit.pos):
+                    accessible.discard(i)
+                    for j in around(i):
+                        accessible.discard(j)
+            elif (dist(unit.pos, pm.pos) == 2):
+                lst.append(RUN)
+                accessible.discard(unit.pos)
+                for i in around(unit.pos):
+                    accessible.discard(i)
             else:
+                # i think i could (should) use NOTHING instead of IGNORE
                 lst.append(IGNORE)
                 accessible.discard(unit.pos)
                 for i in around(unit.pos):
@@ -323,11 +336,11 @@ def filter_threat(pm, accessible):
         else:
             if (pm.cld == 0 and dist(unit.pos, pm.pos) == 1):  # si il est acculé
                 if (pm.cld == unit.cld):
-                    lst.append(THREAT)
+                    lst.append(SAME)
                 elif (pm.cld == 0 and unit.cld >= 1):
                     lst.append(SAME)
                 else:
-                    lst.append(RUN)
+                    lst.append(IGNORE)
                     accessible.discard(unit.pos)
                     for i in around(unit.pos):
                         accessible.discard(i)
@@ -338,7 +351,7 @@ def filter_threat(pm, accessible):
                 for i in around(unit.pos):
                     accessible.discard(i)
             else:
-                lst.append(RUN)
+                lst.append(IGNORE)
                 accessible.discard(unit.pos)
                 for i in around(unit.pos):
                     accessible.discard(i)
@@ -381,13 +394,24 @@ def final_decision(pm, lst):  # choose the one that is the farest from my own te
         for p in my_pacmen:
             summ += dist(p.pos, pos)
         # parce qu'on ne veut pas revenir sur ses pas
-        if summ > tot and dist(pm.pos, pos) <= dist(last_pos[pm.id], pos):
+        if summ > tot and pm.id in last_pos and dist(pm.pos, pos) <= dist(last_pos[pm.id], pos) and not any([a in last_pos for a in around(pos)]):
             tot = summ
             rem = pos
     return rem
 
 
+def get_closest(pos, to_explore):
+    res = pos
+    distance = width + height + 1
+    for e in to_explore:
+        if dist(e, pos) < distance:
+            distance = dist(e, pos)
+            res = e
+    return res
+
 # CHOOSING AMONGST THE 13 POSITIONS
+
+
 def choose_direction(pm):  # care not mess up with accessible vs available
     # simpler version of possible as a SET set()
     accessible = get_accessible(pm.pos)
@@ -397,8 +421,11 @@ def choose_direction(pm):  # care not mess up with accessible vs available
     accessible = set([i for i in accessible if i not in last_pos.values()])
 
     if pm.id in long_shot:
-        if (pm.pos == long_shot[pm.id] or long_shot[pm.id] not in to_explore + big_pellets or pm.pos in last_pos.values()):
-            long_shot[pm.id] = random.choice(to_explore)
+        if long_shot[pm.id] not in big_pellets:
+            if long_shot[pm.id] not in to_explore:
+                long_shot[pm.id] = get_closest(pm.pos, to_explore)
+    else:
+        long_shot[pm.id] = get_closest(pm.pos, to_explore)
 
     if threat_degree == THREAT:
         debug(f"pm {pm.id} THREAT")
@@ -407,25 +434,6 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             return
         targets[pm.id] = modify_typ_to_threat(pm)
         return
-
-    # if threat_degree == RUN:
-        # debug(f"pm {pm.id} RUN")
-        # if pm.id in long_shot:
-        # if any([dist(a, long_shot[pm.id]) <= dist(pm.pos, long_shot[pm.id]) for a in accessible]):
-        # accessible = set(
-        # [a for a in accessible if a not in culsdesacs])
-        # if any([a not in culsdesacs for a in accessible]):
-        # accessible = set([a for a in accessible if a not in culsdesacs])
-        # if any([dist(a, pm.pos) == 2 for a in accessible]):
-        # accessible = set([a for a in accessible if dist(a, pm.pos) == 2])
-        # if any([not min_walls_around(a, 4) for a in accessible]):
-        # accessible = set(
-        # [a for a in accessible if not min_walls_around(a, 5)])
-        # if accessible:
-        # targets[pm.id] = random.choice(available)
-        # else:
-        # debug(f"Nothing accessible for pm{pm.id}")
-        # targets[pm.id] = pm.pos
 
     if threat_degree == FREEZE:  # une chance sur 10 de freeze
         debug(f"pm {pm.id} FREEZE")
@@ -443,7 +451,7 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             debug(f"pm {pm.id} RUN")
         else:
             debug(f"pm {pm.id} NOTHING")
-        if pm.id in long_shot and long_shot[pm.id] in big_pellets and pm.pos not in init_big_pellets:
+        if pm.id in long_shot and long_shot[pm.id] in big_pellets and pm.pos not in init_big_pellets and threat_degree != RUN:
             debug(f" - {pm.id} ls")
             targets[pm.id] = long_shot[pm.id]
             return
@@ -451,10 +459,8 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             # Weird sundays statistics
             debug(f" - {pm.id} speed?")
             if random.random() < len(available) / init_pm_count / 100:
-                debug(f" - {pm.id} speed!")
                 targets[pm.id] = "SPEED"
                 return
-            debug(f" - {pm.id} nope")
         if not pm.stl:
             if any([dist(a, pm.pos) == 1 for a in accessible]):
                 debug(f" - {pm.id} dist == 1")
@@ -485,9 +491,16 @@ def choose_direction(pm):  # care not mess up with accessible vs available
                 accessible = set(
                     [a for a in accessible if dist(a, pm.pos) == 2])
             # 2 cases ago but on my way to a pellet
-            if any([any([type(grid.get_cell(pos.x, pos.y)) == int and pos in around(pm.pos) for pos in around(a)]) for a in accessible]):
+            if any([any([pos in pellets and pos in around(pm.pos) for pos in around(a)]) for a in accessible]):
                 accessible = set([a for a in accessible if any(
-                    [type(grid.get_cell(pos.x, pos.y)) == int and pos in around(pm.pos) for pos in around(a)])])
+                    [pos in pellets and pos in around(pm.pos) for pos in around(a)])])
+            if any(a in pellets for a in accessible):
+                accessible = set([a for a in accessible if a in pellets])
+            if any(a in to_explore for a in accessible):
+                accessible = set([a for a in accessible if a in to_explore])
+            elif any([any([pos in to_explore and pos in around(pm.pos) for pos in around(a)]) for a in accessible]):
+                accessible = set([a for a in accessible if any(
+                    [pos in to_explore and pos in around(pm.pos) for pos in around(a)])])
             elif pm.id in long_shot:  # si y a pas de pellets, on va vers la destination random
                 accessible = set([long_shot[pm.id]])
 
