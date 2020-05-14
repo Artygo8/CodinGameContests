@@ -639,9 +639,9 @@ while True:
         remove_sight_from_explore(pm)
         remove_from_explore(pm)  # old implementation
         grid.add_cell(pm.pos.x, pm.pos.y, pm)
-    for e in [bp for bp in init_big_pellets if not bp in big_pellets]:  # 23h23 smells bad
-        if e in to_explore:
-            to_explore.remove(e)
+    # for e in [bp for bp in init_big_pellets if not bp in big_pellets]:  # 23h23 smells bad
+    #     if e in to_explore:
+    #         to_explore.remove(e)
 
 # ASSIGN BP
     if big_pellets:
