@@ -328,9 +328,11 @@ def filter_threat(pm, accessible):
                     lst.append(RUN)
         if last_threat_lvl[pm.id] == KILL:
             for flt in foe_last_turn:
-                if dist(flt.pos, pm.pos) <= 3:
+                if flt.pos in culsdesacs:
                     accessible.clear()
                     accessible.add(flt.pos)
+                    if flt.cld:
+                        lst.append(KILL)
 
     for foe in foe_pacmen:
         # THREAT
@@ -365,13 +367,11 @@ def filter_threat(pm, accessible):
                     lst.append(IGNORE)
         # WEAK
         elif (eval(pm.typ) - 1) % 3 == eval(foe.typ):
-            if dist(foe.pos, pm.pos) == 1:
+            if dist(foe.pos, pm.pos) == 1 or (dist(foe.pos, pm.pos) == 2 and pm.stl):
                 if pm.stl:
                     if foe.cld:
                         accessible.clear()
-                        for a in around(foe.pos):
-                            if a != pm.pos:
-                                accessible.add(a)
+                        accessible.add(foe.pos)
                         lst.append(KILL)
                     else:
                         lst.append(run(accessible, foe.pos, 1))
@@ -382,6 +382,9 @@ def filter_threat(pm, accessible):
                             accessible.add(foe.pos)
                             lst.append(KILL)
                         else:
+                            accessible.discard(foe.pos)
+                            for ar in around(foe.pos):
+                                accessible.discard(ar)
                             lst.append(IGNORE)
                     else:
                         if pm.cld:
@@ -444,7 +447,7 @@ def filter_threat(pm, accessible):
                         lst.append(run(accessible, foe.pos, 1))
 
     my_close_pacmen = [m for m in my_pacmen if (
-        dist(m.pos, pm.pos) == 1 or dist(m.pos, pm.pos) == 2) and m.pos in last_pos.values()]
+        dist(m.pos, pm.pos) == 1 or dist(m.pos, pm.pos) == 2) and m in last_pos and last_pos[m] == m.pos]
     if my_close_pacmen:
         for mcp in my_close_pacmen:
             if r % 2:
@@ -538,7 +541,7 @@ def choose_direction(pm):  # care not mess up with accessible vs available
     accessible = set([i for i in accessible if i not in last_pos.values()])
 
     if pm.id in long_shot:
-        if long_shot[pm.id] == pm.pos or long_shot[pm.id] not in to_explore:
+        if long_shot[pm.id] == pm.pos or long_shot[pm.id] not in to_explore + big_pellets:
             # tant qu'on a pas besoin d'une cible, on en genere pas !
             del long_shot[pm.id]
 
@@ -581,7 +584,7 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             targets[pm.id] = "SPEED"
             return
         if pm.id in long_shot and long_shot[pm.id] in big_pellets:
-            debug(f" - {pm.id} ls")
+            debug(f" - {pm.id} ls {long_shot[pm.id]}")
             if threat_degree == RUN:
                 if any([dist(a, long_shot[pm.id]) < dist(pm.pos, long_shot[pm.id]) for a in available]):
                     targets[pm.id] = long_shot[pm.id]
@@ -678,16 +681,18 @@ def assign_bp():
             if dist(pm.pos, big) < dist(pm.pos, closest_big):
                 closest_big = big
         closest_big_by_id[pm.id] = closest_big
+        debug(f"closest_big_by_id = {closest_big_by_id}")
     for dup in duplicate_values(closest_big_by_id):
+        debug(f"dup = {dup}")
         distance = width + height + 1
         for pm in my_pacmen:
             if dist(pm.pos, dup) < distance:
                 closest_id = pm.id
                 distance = dist(pm.pos, dup)
-        # si il n'en a pas déjà un d'assigné
         if not (closest_id in long_shot and long_shot[closest_id] in big_pellets):
-            long_shot[closest_id] = dup
+            long_shot[closest_id] = closest_big_by_id[closest_id]
     for coord in unique_values(closest_big_by_id):
+        debug(f"coord = {coord}")
         for pm in my_pacmen:
             if pm.id in closest_big_by_id and closest_big_by_id[pm.id] == coord:
                 if not (pm.id in long_shot and long_shot[pm.id] in big_pellets):
