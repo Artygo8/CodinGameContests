@@ -117,7 +117,7 @@ last_pos = dict()
 targets = dict()
 long_shot = dict()
 
-foe_pos_last_turn = set()
+foe_last_turn = []
 
 width, height = map(int, input().split())
 
@@ -147,8 +147,10 @@ def remove_from_explore(pm):
 def remove_sight_from_explore(pm):
     for d in DIRECTIONS:
         tmp = add(pm.pos, d)
-        while tmp in available:  # big pellets are handeld before those.
-            if grid.get_cell(tmp.x, tmp.y) != 1 and grid.get_cell(tmp.x, tmp.y) not in big_pellets and tmp in to_explore:
+        i = width + height + 1
+        while tmp in available and i > 0:  # big pellets are handeld before those.
+            i -= 1
+            if grid.get_cell(tmp.x, tmp.y) != 1 and grid.get_cell(tmp.x, tmp.y) != 10 and tmp in to_explore:
                 to_explore.remove(tmp)
             tmp = add(tmp, d)
 
@@ -211,25 +213,28 @@ def ennemies_in_sight(pm):  # or close
     return ennemies
 
 
-def min_walls_around(pos, n):
+def walls_around(pos):
     tot = 0
     for direct in DIRECTIONS:
         tmp = add(pos, direct)
         if grid.get_cell(tmp.x, tmp.y) == '#':
             tot += 1
-    for direct in DIRECTIONS:
+    for direct in DIAGONALS:
         tmp = add(pos, direct)
         if grid.get_cell(tmp.x, tmp.y) == '#':
             tot += 1
-    return tot >= n
+    return tot
 
 
 # culsdesacs filling
 for cell in available:
-    if (min_walls_around(cell, 6)):
+    last = 0
+    if (walls_around(cell) >= 6):
         culsdesacs.append(cell)
         l = around(cell)
-        while len(l) == 1:
+        i = width + height + 1
+        while len(l) == 1 and i > 0:
+            i -= 1
             culsdesacs.append(l[0])
             last = l[0]
             l = [i for i in around(l[0]) if i not in culsdesacs]
@@ -288,91 +293,142 @@ def modify_typ_to_same(pm):
 NOTHING = 0     #
 IGNORE = 1      #
 FREEZE = 2      #
-SAME = 3        #
-THREAT = 4      #
-RUN = 5         #
-KILL = 6        #
+WAIT = 3        #
+SPEED = 4       #
+SAME = 5        #
+THREAT = 6      #
+RUN = 7         #
+KILL = 8        #
 #################
+
+
+def run(accessible, pos, n):  # run repaired
+    to_discard = [pos]
+    while (n > 0):
+        tmp_td = list(to_discard)
+        n -= 1
+        for td in tmp_td:
+            for i in around(td):
+                to_discard.append(i)
+    for td in to_discard + diagonals(pos):
+        accessible.discard(td)
+    return(RUN)
 
 # GET THE THREAT LVL
 
 
 def filter_threat(pm, accessible):
     lst = []
-    for unit in foe_pacmen:
-        # THREAT HANDLING
-        if (eval(pm.typ) + 1) % 3 == eval(unit.typ):
-            if dist(unit.pos, pm.pos) == 1 or (dist(unit.pos, pm.pos) == 2 and unit.stl):
-                if pm.cld == 0 and unit.cld != 0:
-                    lst.append(THREAT)
-                elif pm.cld == 0 and unit.cld == 0:
-                    # NORMALLY ITS SAME BUT TO BEAT OTHER PLAYERS I WILL TRY THREAT
-                    lst.append(THREAT)
+    for foe in foe_pacmen:
+        # THREAT
+        if (eval(pm.typ) + 1) % 3 == eval(foe.typ):
+            if dist(foe.pos, pm.pos) == 1:
+                if foe.cld == 0 or pm.cld != 0:
+                    lst.append(run(accessible, foe.pos, 1))
                 else:
-                    lst.append(RUN)
-                    accessible.discard(unit.pos)
-                    for i in around(unit.pos):
-                        accessible.discard(i)
-            elif (dist(unit.pos, pm.pos) == 3 and unit.stl) or dist(unit.pos, pm.pos) == 4 and pm.stl:
-                lst.append(RUN)
-                accessible.discard(unit.pos)
-                for i in around(unit.pos):
-                    accessible.discard(i)
-                    for j in around(i):
-                        accessible.discard(j)
-            elif (dist(unit.pos, pm.pos) == 2):
-                lst.append(RUN)
-                accessible.discard(unit.pos)
-                for i in around(unit.pos):
-                    accessible.discard(i)
-                for i in diagonals(unit.pos):
-                    accessible.discard(i)
-            else:
-                # i think i could (should) use NOTHING instead of IGNORE
-                lst.append(IGNORE)
-                accessible.discard(unit.pos)
-                for i in around(unit.pos):
-                    if i in accessible:
-                        accessible.remove(i)
-    # I AM THE THREAT
-        elif (eval(pm.typ) - 1) % 3 == eval(unit.typ):
-            if unit.cld == 0 and pm.cld != 0:
-                lst.append(RUN)
-                accessible.discard(unit.pos)
-                for i in around(unit.pos):
-                    accessible.discard(i)
-            elif (unit.cld == 0 and pm.cld == 0 and dist(unit.pos, pm.pos) == 1):
-                lst.append(THREAT)
-            elif (unit.cld >= pm.cld and unit.pos in culsdesacs):
-                accessible.clear()
-                accessible.add(unit.pos)
-                lst.append(KILL)
-            else:
-                lst.append(IGNORE)
-                accessible.discard(unit.pos)
-    # SAME THAN ME
-        else:
-            if (pm.cld == 0 and dist(unit.pos, pm.pos) == 1):
-                if (pm.cld == unit.cld):
-                    lst.append(SAME)
-                elif (pm.cld == 0 and unit.cld >= 1):
-                    lst.append(SAME)
+                    lst.append(THREAT)
+            elif dist(foe.pos, pm.pos) == 2 and foe.pos in accessible:  # ça c'est du génie
+                if pm.cld != 0 or pm.pos in culsdesacs:
+                    lst.append(run(accessible, foe.pos, 2))
+                elif pm.cld == 0:
+                    if foe.stl != 0:
+                        lst.append(THREAT)
+                    else:
+                        lst.append(SPEED)
+            elif dist(foe.pos, pm.pos) == 3 and any([a in accessible for a in around(foe.pos)]):
+                if foe.stl > 1 or foe.cld == 0:
+                    lst.append(run(accessible, foe.pos, 3))
+                elif foe.stl == 1 or pm.stl:
+                    lst.append(run(accessible, foe.pos, 2))
                 else:
                     lst.append(IGNORE)
-                    accessible.discard(unit.pos)
-                    for i in around(unit.pos):
-                        accessible.discard(i)
-            # TODO more special cases
-            elif pm.cld > unit.cld and not unit.stl and not pm.stl:  # +1 ?
-                lst.append(RUN)
-                accessible.discard(unit.pos)
-                for i in around(unit.pos):
-                    accessible.discard(i)
+            elif dist(foe.pos, pm.pos) == 4:
+                if foe.stl and pm.stl:
+                    lst.append(run(accessible, foe.pos, 3))
             else:
-                lst.append(IGNORE)
-                accessible.discard(unit.pos)
-                for i in around(unit.pos):
-                    accessible.discard(i)
+                if pm.cld == 0:
+                    lst.append(SPEED)
+                else:
+                    lst.append(IGNORE)
+        # WEAK
+        elif (eval(pm.typ) - 1) % 3 == eval(foe.typ):
+            if dist(foe.pos, pm.pos) == 1:
+                if pm.stl:
+                    if foe.cld:
+                        accessible.clear()
+                        for a in around(foe.pos):
+                            if a != pm.pos:
+                                accessible.add(a)
+                        lst.append(KILL)
+                    else:
+                        lst.append(run(accessible, foe.pos, 1))
+                else:
+                    if foe.cld:
+                        if foe.pos in culsdesacs:
+                            accessible.clear()
+                            accessible.add(foe.pos)
+                            lst.append(KILL)
+                        else:
+                            lst.append(IGNORE)
+                    else:
+                        if pm.cld:
+                            lst.append(run(accessible, foe.pos, 1))
+                        else:
+                            if pm.pos not in culsdesacs:
+                                lst.append(SPEED)
+                            else:
+                                lst.append(WAIT)
+            # ça c'est du génie
+            elif dist(foe.pos, pm.pos) >= 2 and foe.pos in accessible or any([a in accessible for a in around(foe.pos)]):
+                if pm.stl:
+                    if foe.cld:
+                        accessible.clear()
+                        accessible.add(foe.pos)
+                        lst.append(KILL)
+                    else:
+                        lst.append(IGNORE)
+                else:
+                    if foe.cld:
+                        if foe.pos in culsdesacs:
+                            accessible.clear()
+                            accessible.add(foe.pos)
+                            lst.append(KILL)
+                        else:
+                            if pm.cld:
+                                lst.append(IGNORE)
+                            else:
+                                lst.append(SPEED)
+                    else:
+                        if pm.cld >= dist(foe.pos, pm.pos):
+                            lst.append(run(accessible, foe.pos, 1))
+                        else:
+                            lst.append(WAIT)
+# SAME
+        else:
+            if dist(foe.pos, pm.pos) == 1:
+                if pm.cld < foe.cld:
+                    if foe.pos in culsdesacs:
+                        if foe.cld > 1:
+                            lst.append(SAME)
+                        else:
+                            lst.append(WAIT)
+                    else:
+                        lst.append(IGNORE)
+                else:
+                    lst.append(run(accessible, foe.pos, 1))
+            else:
+                if pm.pos not in culsdesacs:
+                    if pm.cld == 0:
+                        lst.append(SPEED)
+                    else:
+                        lst.append(IGNORE)
+                else:
+                    if pm.cld < foe.cld:
+                        accessible.clear()
+                        accessible.add(foe.pos)
+                        lst.append(KILL)
+                    else:
+                        lst.append(run(accessible, foe.pos, 1))
 
     my_close_pacmen = [m.pos for m in my_pacmen if (
         dist(m.pos, pm.pos) == 1 or dist(m.pos, pm.pos) == 2) and m.pos in last_pos]
@@ -418,16 +474,30 @@ def final_decision(pm, lst):  # choose the one that is the farest from my own te
     return rem
 
 
-# closest but farest from allies
-def get_closest(pos, to_explore):
-    res = to_explore[0]
+def get_closest(pos):
+    res = 0
     distance = width + height + 1
-    for e in to_explore:
-        if dist(e, pos) < distance:  # not sure about it
-            if not any([(dist(e, o.pos) <= dist(e, pos) and o.pos != pos) for o in my_pacmen]):
-                distance = dist(e, pos)
-                res = e
+    for a in available:
+        if len(around(a)) == 4 and any([ar in to_explore for ar in around(a)]):
+            if dist(a, pos) < distance:  # not sure about it
+                if not any([(dist(a, o.pos) <= dist(a, pos) and o.pos != pos) for o in my_pacmen]):
+                    distance = dist(a, pos)
+                    res = a
+    if not res:
+        distance = width + height + 1
+        for e in to_explore:
+            if dist(e, pos) < distance:  # not sure about it
+                if not any([(dist(e, o.pos) <= dist(e, pos) and o.pos != pos) for o in my_pacmen]):
+                    distance = dist(e, pos)
+                    res = e
     return res
+
+
+def more_in_cds():
+    cds_to_explore = [c for c in culsdesacs if c in to_explore]
+    if len(to_explore) / 2 < len(cds_to_explore):
+        return 1
+    return 0
 
 
 # CHOOSING AMONGST THE 13 POSITIONS
@@ -440,11 +510,9 @@ def choose_direction(pm):  # care not mess up with accessible vs available
     accessible = set([i for i in accessible if i not in last_pos.values()])
 
     if pm.id in long_shot:
-        if long_shot[pm.id] not in big_pellets:
-            if long_shot[pm.id] not in to_explore:
-                long_shot[pm.id] = get_closest(pm.pos, to_explore)
-    else:
-        long_shot[pm.id] = get_closest(pm.pos, to_explore)
+        if long_shot[pm.id] == pm.pos or long_shot[pm.id] not in to_explore:
+            # tant qu'on a pas besoin d'une cible, on en genere pas !
+            del long_shot[pm.id]
 
     if threat_degree == THREAT:
         debug(f"pm {pm.id} THREAT")
@@ -459,10 +527,18 @@ def choose_direction(pm):  # care not mess up with accessible vs available
     if threat_degree == FREEZE:  # une chance sur 10 de freeze
         debug(f"pm {pm.id} FREEZE")
         if random.random() * 10 < 1:
-            targets[pm.id] = pm.pos
-            return
+            threat_degree = WAIT
         else:
             threat_degree = NOTHING
+
+    if threat_degree == WAIT:  # une chance sur 10 de freeze
+        debug(f"pm {pm.id} WAIT")
+        targets[pm.id] = pm.pos
+        return
+
+    if threat_degree == SPEED:
+        targets[pm.id] = "SPEED"
+        return
 
     if threat_degree == NOTHING or threat_degree == IGNORE or threat_degree == RUN:
         accessible.discard(pm.pos)  # no threat so i wont stay on place
@@ -472,16 +548,20 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             debug(f"pm {pm.id} RUN")
         else:
             debug(f"pm {pm.id} NOTHING")
-        if pm.id in long_shot and long_shot[pm.id] in big_pellets and threat_degree != RUN:
-            debug(f" - {pm.id} ls")
-            targets[pm.id] = long_shot[pm.id]
-            return
-        if pm.cld == 0 and not any([dist(foe, pm.pos) < 4 for foe in foe_pos_last_turn]) and threat_degree == NOTHING:
+        if pm.cld == 0 and not any([dist(foe.pos, pm.pos) < 4 for foe in foe_last_turn]) and threat_degree == NOTHING:
             # Weird sundays statistics
             debug(f" - {pm.id} speed?")
             if random.random() < len(available) / init_pm_count / 100:
                 targets[pm.id] = "SPEED"
                 return
+        # if pm.cld == 0 and threat_degree == NOTHING:
+        #     debug(f" - {pm.id} speed?")
+        #     targets[pm.id] = "SPEED"
+        #     return
+        if pm.id in long_shot and long_shot[pm.id] in big_pellets and threat_degree != RUN:
+            debug(f" - {pm.id} ls")
+            targets[pm.id] = long_shot[pm.id]
+            return
         if not pm.stl:
             if any([dist(a, pm.pos) == 1 for a in accessible]):
                 debug(f" - {pm.id} dist == 1")
@@ -492,15 +572,16 @@ def choose_direction(pm):  # care not mess up with accessible vs available
                 accessible = set([a for a in accessible if a in pellets])
             # REMOVED to_explore because we are at dist 1 anyway and bugged wausing FREEZE
             # si y a pas de pellets, on va vers la destination random
-            elif pm.id in long_shot and threat_degree != RUN:
-                debug(f" - {pm.id} choosing to go ls")
+            elif threat_degree != RUN:
+                if not pm.id in long_shot:
+                    long_shot[pm.id] = get_closest(pm.pos)
                 accessible = set([long_shot[pm.id]])
             if any([any([type(grid.get_cell(pos.x, pos.y)) == int for pos in around(a)]) for a in accessible]):
                 debug(f" - {pm.id} good stuff around")
                 accessible = set([a for a in accessible if any(
                     [type(grid.get_cell(pos.x, pos.y)) == int for pos in around(a)])])
             # if we need to run we dont go in cul de sac
-            if len(culsdesacs) / (width * height) < 0.15 or threat_degree == RUN:
+            if not more_in_c:
                 if any([a not in culsdesacs for a in accessible]):
                     accessible = set(
                         [a for a in accessible if a not in culsdesacs])
@@ -523,10 +604,21 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             elif any([any([pos in to_explore and pos in around(pm.pos) for pos in around(a)]) for a in accessible]):
                 accessible = set([a for a in accessible if any(
                     [pos in to_explore and pos in around(pm.pos) for pos in around(a)])])
-            elif pm.id in long_shot:  # si y a pas de pellets, on va vers la destination random
+            elif threat_degree != RUN:
+                if not pm.id in long_shot:
+                    long_shot[pm.id] = get_closest(pm.pos)
                 accessible = set([long_shot[pm.id]])
+            if not more_in_c:
+                if any([a not in culsdesacs for a in accessible]):
+                    accessible = set(
+                        [a for a in accessible if a not in culsdesacs])
+            else:
+                if any([a in culsdesacs for a in accessible]):
+                    accessible = set(
+                        [a for a in accessible if a in culsdesacs])
 
     if threat_degree == KILL:  # big pellets passent avant la vie des autres
+        debug(f"pm {pm.id} KILL {accessible}")
         if pm.id in long_shot and long_shot[pm.id] in big_pellets:
             targets[pm.id] = long_shot[pm.id]
             return
@@ -549,8 +641,6 @@ def print_directives(my_pacmen, big_pellets):
             commands.append(
                 f"MOVE {pm.id} {targets[pm.id].x} {targets[pm.id].y}")
     print("|".join(commands))
-
-#
 
 
 def assign_bp():
@@ -579,10 +669,12 @@ def assign_bp():
 
 # The Loop
 
+more_in_c = True
 r = 0
 
 while True:
 
+    more_in_c = more_in_cds()
     # debug(f"len avalable = {len(available)}")
 
     my_dead_pacmen = []
@@ -638,9 +730,9 @@ while True:
         remove_sight_from_explore(pm)
         remove_from_explore(pm)  # old implementation
         grid.add_cell(pm.pos.x, pm.pos.y, pm)
-    # for e in [bp for bp in init_big_pellets if not bp in big_pellets]:  # 23h23 smells bad
-    #     if e in to_explore:
-    #         to_explore.remove(e)
+    for e in [bp for bp in init_big_pellets if not bp in big_pellets]:  # 23h23 smells bad
+        if e in to_explore:
+            to_explore.remove(e)
 
 # ASSIGN BP
     if big_pellets:
@@ -652,6 +744,6 @@ while True:
 
     print_directives(my_pacmen, big_pellets)
 
-    foe_pos_last_turn = set([foe.pos for foe in foe_pacmen])
+    foe_last_turn = [foe for foe in foe_pacmen]
 
     r += 1
