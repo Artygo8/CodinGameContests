@@ -318,6 +318,20 @@ def run(accessible, pos, n):  # run repaired
 
 def filter_threat(pm, accessible):
     lst = []
+
+# special case about last turn decision
+    if pm.id in last_threat_lvl:
+        if last_threat_lvl[pm.id] == RUN:
+            for flt in foe_last_turn:
+                if dist(flt.pos, pm.pos) <= 3:
+                    run(accessible, flt.pos, 3)
+                    lst.append(RUN)
+        if last_threat_lvl[pm.id] == KILL:
+            for flt in foe_last_turn:
+                if dist(flt.pos, pm.pos) <= 3:
+                    accessible.clear()
+                    accessible.add(flt.pos)
+
     for foe in foe_pacmen:
         # THREAT
         if (eval(pm.typ) + 1) % 3 == eval(foe.typ):
@@ -429,15 +443,16 @@ def filter_threat(pm, accessible):
                     else:
                         lst.append(run(accessible, foe.pos, 1))
 
-    my_close_pacmen = [m.pos for m in my_pacmen if (
-        dist(m.pos, pm.pos) == 1 or dist(m.pos, pm.pos) == 2) and m.pos in last_pos]
+    my_close_pacmen = [m for m in my_pacmen if (
+        dist(m.pos, pm.pos) == 1 or dist(m.pos, pm.pos) == 2) and m.pos in last_pos.values()]
     if my_close_pacmen:
-        for i in my_close_pacmen:
-            accessible.discard(i)
-            if pm.stl:  # si j'ai des speed turns, je me casse
-                for a in around(i):
-                    accessible.discard(i)
-        lst.append(FREEZE)
+        for mcp in my_close_pacmen:
+            if r % 2:
+                if mcp.id - pm.id < 0:
+                    lst.append(WAIT)
+            else:
+                if mcp.id - pm.id > 0:
+                    lst.append(WAIT)
     if lst:
         return (max(lst))
     return NOTHING
@@ -509,11 +524,15 @@ def more_in_cds():
     return 0
 
 
+last_threat_lvl = dict()
 # CHOOSING AMONGST THE 13 POSITIONS
+
+
 def choose_direction(pm):  # care not mess up with accessible vs available
     # simpler version of possible as a SET set()
     accessible = get_accessible(pm.pos)
     threat_degree = filter_threat(pm, accessible)
+    last_threat_lvl[pm.id] = threat_degree
 
     # debug(accessible)
     accessible = set([i for i in accessible if i not in last_pos.values()])
@@ -563,7 +582,7 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             return
         if pm.id in long_shot and long_shot[pm.id] in big_pellets:
             debug(f" - {pm.id} ls")
-            if threat degree == RUN:
+            if threat_degree == RUN:
                 if any([dist(a, long_shot[pm.id]) < dist(pm.pos, long_shot[pm.id]) for a in available]):
                     targets[pm.id] = long_shot[pm.id]
                     return
@@ -621,7 +640,7 @@ def choose_direction(pm):  # care not mess up with accessible vs available
                     accessible = set(
                         [a for a in accessible if a not in culsdesacs])
             else:
-                if any([a in culsdesacs for a in accessible]):
+                if any([a in culsdesacs and a in pellets for a in accessible]):
                     accessible = set(
                         [a for a in accessible if a in culsdesacs])
 
