@@ -429,14 +429,8 @@ def filter_threat(pm, accessible):
             else:
                 if mcp.id - pm.id > 0:
                     lst.append(WAIT)
-    if pm.id in occupied_tunnels:
-        del occupied_tunnels[pm.id]
-    copy_acc = set(accessible)
-    for ac in copy_acc:
-        if ac in occupied_tunnels.values():
-            accessible.discard(ac)
-    if pm.id in last_pos and last_pos[pm.id] == pm.pos and not my_close_pacmen:
-        if pm.cld == 0 and last_threat_lvl[pm.id] != WAIT:
+    elif pm.id in last_pos and last_pos[pm.id] == pm.pos:
+        if pm.cld == 0:
             lst.append(SAME)
     if lst:
         return (max(lst))
@@ -459,32 +453,17 @@ def get_accessible(pos):
     return accessible
 
 
-def final_decision(pm, lst):  # choose the one that goes in the longest tunnel, away from my team
+def final_decision(pm, lst):  # choose the one that is the farest from my own team
     rem = lst[0]
-    if rem in pellets:
-        tunnel_size = 0
-        for elem in lst:
-            for i, tu in enumerate(tunnels):
-                if elem in tu:
-                    if len(tu) > tunnel_size and i not in occupied_tunnels.values():
-                        rem = elem
-                        tunnel_size = len(tu)
-                        occupied_tunnels[pm.id] = i
-    else:
-        inter = 0
-        for elem in lst:
-            if elem in intersect and len([a for a in around(elem) if a in to_explore]) > inter:
-                inter = len([a for a in around(elem) if a in to_explore])
-                rem = elem
-        if not inter:
-            tunnel_size = width
-            for elem in lst:
-                for i, tu in enumerate(tunnels):
-                    if elem in tu:
-                        if len(tu) < tunnel_size and i not in occupied_tunnels.values():
-                            rem = elem
-                            tunnel_size = len(tu)
-                            occupied_tunnels[pm.id] = i
+    tot = 0
+    for pos in lst:
+        summ = 0
+        for p in my_pacmen:
+            summ += dist(p.pos, pos)
+        # parce qu'on ne veut pas revenir sur ses pas
+        if summ > tot and pm.id in last_pos and dist(pm.pos, pos) <= dist(last_pos[pm.id], pos) and not any([a in last_pos for a in around(pos)]):
+            tot = summ
+            rem = pos
     return rem
 
 
@@ -497,21 +476,46 @@ def get_keys(dico, value):
 
 
 # closest but farest from allies
-def get_closest(pm):
+def get_closest(pm, to_explore):
     res = 0
     distance = width + height + 1
-    for i in intersect:
-        if dist(i, pm.pos) < distance and dist(i, pm.pos) <= dist(i, last_pos[pm.id]):
-            if any([ai in to_explore for ai in around(i)]):
-                distance = dist(i, pm.pos)
-                res = i
+    m = 9  # ?????????????????????????????????
+    while not res and m > 0:
+        for key in get_keys(most_to_explore, m):
+            if dist(key, pm.pos) < distance and dist(key, pm.pos) <= dist(key, last_pos[pm.id]):
+                # THIS IS WEIRD BUT I TRUST MY OTHER SELF
+                #        if key in closer_from[pm.id] or len(closer_from[pm.id]) < len(to_explore):
+                distance = dist(key, pm.pos)
+                res = key
+        m -= 1
+    m = 9
     if not res:
-        distance = width + height + 1
-        for e in to_explore:
-            if dist(e, pos) < distance:  # not sure about it
-                if not any([(dist(e, o.pos) <= dist(e, pos) and o.pos != pos) for o in my_pacmen]):
-                    distance = dist(e, pos)
-                    res = e
+        while not res and m > 0:
+            for key in get_keys(most_to_explore, m):
+                if dist(key, pm.pos) < distance:  # not sure about it
+                    distance = dist(key, pm.pos)
+                    res = key
+            m -= 1
+    # for a in available:
+    #     if len(around(a)) >= 3 and any([ar in to_explore for ar in around(a)]):
+    #         if dist(a, pos) < distance:  # not sure about it
+    #             if not any([(dist(a, o.pos) <= dist(a, pos) and o.pos != pos) for o in my_pacmen]):
+    #                 distance = dist(a, pos)
+    #                 res = a
+#    if not res:
+#        for a in available:
+#            if len(around(a)) == 3 and any([ar in to_explore for ar in around(a)]):
+#                if dist(a, pos) < distance:  # not sure about it
+#                    if not any([(dist(a, o.pos) <= dist(a, pos) and o.pos != pos) for o in my_pacmen]):
+#                        distance = dist(a, pos)
+#                        res = a
+    # if not res:
+        # distance = width + height + 1
+        # for e in to_explore:
+            # if dist(e, pos) < distance:  # not sure about it
+            # if not any([(dist(e, o.pos) <= dist(e, pos) and o.pos != pos) for o in my_pacmen]):
+            # distance = dist(e, pos)
+            # res = e
     if not res:
         res = Coord(0, 0)
     return res
@@ -552,6 +556,13 @@ def choose_direction(pm):  # care not mess up with accessible vs available
         targets[pm.id] = modify_typ_to_same(pm)
         return
 
+    if threat_degree == FREEZE:  # une chance sur 10 de freeze
+        debug(f"pm {pm.id} FREEZE")
+        if random.random() * 10 < 1:
+            threat_degree = WAIT
+        else:
+            threat_degree = NOTHING
+
     if threat_degree == WAIT:  # une chance sur 10 de freeze
         debug(f"pm {pm.id} WAIT")
         targets[pm.id] = pm.pos
@@ -590,7 +601,7 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             if any([a in pellets for a in accessible]):  # D'abord on check pour des pellets
                 debug(f" - {pm.id} pellets !")
                 accessible = set([a for a in accessible if a in pellets])
-            elif any([pos in to_explore and pos in around(pm.pos) for pos in accessible]):
+            elif any([any([pos in to_explore and pos in around(pm.pos) for pos in around(a)]) for a in accessible]):
                 accessible = set([a for a in accessible if any(
                     [pos in to_explore and pos in around(pm.pos) for pos in around(a)])])
             # REMOVED to_explore because we are at dist 1 anyway and bugged wausing FREEZE
@@ -598,24 +609,48 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             elif threat_degree != RUN:
                 debug(f" - {pm.id} long s !")
                 if not pm.id in long_shot:
-                    long_shot[pm.id] = get_closest(pm)
+                    long_shot[pm.id] = get_closest(pm, to_explore)
                 accessible = set([long_shot[pm.id]])
             # if any([any([type(grid.get_cell(pos.x, pos.y)) == int for pos in around(a)]) for a in accessible]):
             #     debug(f" - {pm.id} good stuff around")
             #     accessible = set([a for a in accessible if any(
             #         [type(grid.get_cell(pos.x, pos.y)) == int for pos in around(a)])])
             # if we need to run we dont go in cul de sac
+            if not more_in_c:
+                if any([a not in culsdesacs for a in accessible]):
+                    accessible = set(
+                        [a for a in accessible if a not in culsdesacs])
+            else:
+                if any([a in culsdesacs and a in pellets for a in accessible]):
+                    accessible = set(
+                        [a for a in accessible if a in culsdesacs and a in pellets])
         else:
+            if any([dist(a, pm.pos) == 2 for a in accessible]):
+                accessible = set(
+                    [a for a in accessible if dist(a, pm.pos) == 2])
             # 2 cases ago but on my way to a pellet
+            if any([any([pos in pellets and pos in around(pm.pos) for pos in around(a)]) for a in accessible]):
+                accessible = set([a for a in accessible if any(
+                    [pos in pellets and pos in around(pm.pos) for pos in around(a)])])
             if any(a in pellets for a in accessible):
                 accessible = set([a for a in accessible if a in pellets])
+            if any(a in to_explore for a in accessible):
+                accessible = set([a for a in accessible if a in to_explore])
             elif any([any([pos in to_explore and pos in around(pm.pos) for pos in around(a)]) for a in accessible]):
                 accessible = set([a for a in accessible if any(
                     [pos in to_explore and pos in around(pm.pos) for pos in around(a)])])
             elif threat_degree != RUN:
                 if not pm.id in long_shot:
-                    long_shot[pm.id] = get_closest(pm)
+                    long_shot[pm.id] = get_closest(pm, to_explore)
                 accessible = set([long_shot[pm.id]])
+            if not more_in_c:
+                if any([a not in culsdesacs for a in accessible]):
+                    accessible = set(
+                        [a for a in accessible if a not in culsdesacs])
+            else:
+                if any([a in culsdesacs and a in pellets for a in accessible]):
+                    accessible = set(
+                        [a for a in accessible if a in culsdesacs and a in pellets])
 
     if threat_degree == KILL:  # big pellets passent avant la vie des autres
         debug(f"pm {pm.id} KILL {accessible}")
@@ -747,22 +782,22 @@ while True:
             to_explore.remove(e)
 
 # FILLING MOST_TO_EXPLORE
-    # most_to_explore = dict()
-    # for av in available:
-    #     most_to_explore[av] = len(get_explorable(av))
+    most_to_explore = dict()
+    for av in available:
+        most_to_explore[av] = len(get_explorable(av))
 
 # FILLING CLOSER_FROM
-    # closer_from = dict()
-    # for p in my_pacmen:
-        # closer_from[p.id] = []
-    # for av in available:
-        # closest_id = 0
-        # distance = height + width + 1
-        # for p in my_pacmen:  # what about theirs
-            # if dist(p.pos, av) < distance:
-            # distance = dist(p.pos, av)
-            # closest_id = p.id
-        # closer_from[closest_id].append(av)
+    closer_from = dict()
+    for p in my_pacmen:
+        closer_from[p.id] = []
+    for av in available:
+        closest_id = 0
+        distance = height + width + 1
+        for p in my_pacmen:  # what about theirs
+            if dist(p.pos, av) < distance:
+                distance = dist(p.pos, av)
+                closest_id = p.id
+        closer_from[closest_id].append(av)
 
 # ASSIGN BP
     if big_pellets:
@@ -770,9 +805,6 @@ while True:
 
     for pm in my_pacmen:
         choose_direction(pm)
-        for i, tu in enumerate(tunnels):
-            if pm.pos in tu:
-                occupied_tunnels[pm.id] = i
         last_pos[pm.id] = pm.pos
 
     print_directives(my_pacmen, big_pellets)
