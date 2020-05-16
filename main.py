@@ -323,7 +323,7 @@ def filter_threat(pm, accessible):
     if pm.id in last_threat_lvl:
         if last_threat_lvl[pm.id] == RUN:
             for flt in foe_last_turn:
-                if dist(flt.pos, pm.pos) <= 3:
+                if dist(flt.pos, pm.pos) <= 4:
                     run(accessible, flt.pos, 3)
                     lst.append(RUN)
         if last_threat_lvl[pm.id] == KILL:
@@ -423,15 +423,15 @@ def filter_threat(pm, accessible):
         else:
             if dist(foe.pos, pm.pos) == 1:
                 if pm.cld < foe.cld:
-                    if foe.pos in culsdesacs:
-                        if foe.cld > 1:
-                            lst.append(SAME)
-                        else:
-                            lst.append(WAIT)
-                    else:
-                        lst.append(IGNORE)
+                    if foe.cld > 1:
+                        lst.append(SAME)
+                    elif foe.pos in culsdesacs:
+                        lst.append(WAIT)
                 else:
-                    lst.append(run(accessible, foe.pos, 1))
+                    accessible.discard(foe.pos)
+                    for ar in around(foe.pos):
+                        accessible.discard(ar)
+                    lst.append(IGNORE)
             else:
                 if pm.pos not in culsdesacs:
                     if pm.cld == 0:
@@ -447,7 +447,8 @@ def filter_threat(pm, accessible):
                         lst.append(run(accessible, foe.pos, 1))
 
     my_close_pacmen = [m for m in my_pacmen if (
-        dist(m.pos, pm.pos) == 1 or dist(m.pos, pm.pos) == 2) and m in last_pos and last_pos[m] == m.pos]
+        m.pos in accessible and m.id in last_pos and last_pos[m.id] == m.pos and pm.id != m.id)]
+    debug(f'myclosepm : {my_close_pacmen}')
     if my_close_pacmen:
         for mcp in my_close_pacmen:
             if r % 2:
@@ -456,6 +457,9 @@ def filter_threat(pm, accessible):
             else:
                 if mcp.id - pm.id > 0:
                     lst.append(WAIT)
+    elif pm.id in last_pos and last_pos[pm.id] == pm.pos:
+        if pm.cld == 0:
+            lst.append(SAME)
     if lst:
         return (max(lst))
     return NOTHING
@@ -496,18 +500,18 @@ def get_closest(pos, to_explore):
     res = 0
     distance = width + height + 1
     for a in available:
-        if len(around(a)) == 4 and any([ar in to_explore for ar in around(a)]):
+        if len(around(a)) >= 3 and any([ar in to_explore for ar in around(a)]):
             if dist(a, pos) < distance:  # not sure about it
                 if not any([(dist(a, o.pos) <= dist(a, pos) and o.pos != pos) for o in my_pacmen]):
                     distance = dist(a, pos)
                     res = a
-    if not res:
-        for a in available:
-            if len(around(a)) == 3 and any([ar in to_explore for ar in around(a)]):
-                if dist(a, pos) < distance:  # not sure about it
-                    if not any([(dist(a, o.pos) <= dist(a, pos) and o.pos != pos) for o in my_pacmen]):
-                        distance = dist(a, pos)
-                        res = a
+#    if not res:
+#        for a in available:
+#            if len(around(a)) == 3 and any([ar in to_explore for ar in around(a)]):
+#                if dist(a, pos) < distance:  # not sure about it
+#                    if not any([(dist(a, o.pos) <= dist(a, pos) and o.pos != pos) for o in my_pacmen]):
+#                        distance = dist(a, pos)
+#                        res = a
     if not res:
         distance = width + height + 1
         for e in to_explore:
@@ -616,9 +620,9 @@ def choose_direction(pm):  # care not mess up with accessible vs available
                     accessible = set(
                         [a for a in accessible if a not in culsdesacs])
             else:
-                if any([a in culsdesacs for a in accessible]):
+                if any([a in culsdesacs and a in pellets for a in accessible]):
                     accessible = set(
-                        [a for a in accessible if a in culsdesacs])
+                        [a for a in accessible if a in culsdesacs and a in pellets])
         else:
             if any([dist(a, pm.pos) == 2 for a in accessible]):
                 accessible = set(
@@ -645,7 +649,7 @@ def choose_direction(pm):  # care not mess up with accessible vs available
             else:
                 if any([a in culsdesacs and a in pellets for a in accessible]):
                     accessible = set(
-                        [a for a in accessible if a in culsdesacs])
+                        [a for a in accessible if a in culsdesacs and a in pellets])
 
     if threat_degree == KILL:  # big pellets passent avant la vie des autres
         debug(f"pm {pm.id} KILL {accessible}")
@@ -681,9 +685,7 @@ def assign_bp():
             if dist(pm.pos, big) < dist(pm.pos, closest_big):
                 closest_big = big
         closest_big_by_id[pm.id] = closest_big
-        debug(f"closest_big_by_id = {closest_big_by_id}")
     for dup in duplicate_values(closest_big_by_id):
-        debug(f"dup = {dup}")
         distance = width + height + 1
         for pm in my_pacmen:
             if dist(pm.pos, dup) < distance:
@@ -692,7 +694,6 @@ def assign_bp():
         if not (closest_id in long_shot and long_shot[closest_id] in big_pellets):
             long_shot[closest_id] = closest_big_by_id[closest_id]
     for coord in unique_values(closest_big_by_id):
-        debug(f"coord = {coord}")
         for pm in my_pacmen:
             if pm.id in closest_big_by_id and closest_big_by_id[pm.id] == coord:
                 if not (pm.id in long_shot and long_shot[pm.id] in big_pellets):
