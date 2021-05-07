@@ -3,9 +3,9 @@ import math
 from enum import Enum
 import random
 
-DAYS_TO_PLANT = 20
-MAX_AMONT_TREE = 11
-
+DAYS_TO_PLANT = 18
+MAX_AMONT_TREE = 8
+COMPLETE_TIME = 22
 
 def debug(*s):
     print(*s, file=sys.stderr, flush=True)
@@ -106,9 +106,16 @@ class Game:
     def compute_next_action(self):
         debug([po for po in self.possible_actions])
 
+        # remove SEED
         if self.day > DAYS_TO_PLANT or sum([tree.is_mine for tree in self.trees]) > MAX_AMONT_TREE:
             while self.possible_actions and self.possible_actions[0].type == ActionType.SEED:
                 self.possible_actions.pop(0)
+
+        # remove COMPLETE
+        if self.day < COMPLETE_TIME and sum([(tree.size == 3, 0)[tree.is_mine] for tree in self.trees]) < 4:
+            while self.possible_actions and self.possible_actions[0].type == ActionType.COMPLETE:
+                self.possible_actions.pop(0)
+
 
         return self.possible_actions[0] if self.possible_actions else "WAIT"
 
