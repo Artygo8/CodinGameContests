@@ -62,7 +62,7 @@ class Game:
         self.opponent_is_waiting = 0
 
     def compute_next_action(self):
-        return self.possible_actions[0]
+        return self.possible_actions[0] if self.possible_actions else "WAIT"
 
 
 number_of_cells = int(input())
@@ -105,4 +105,4 @@ while True:
         else:
             game.possible_actions.append(action)
 
-    print(game.compute_next_action() or "WAIT")
+    print(game.compute_next_action())
