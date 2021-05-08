@@ -3,7 +3,7 @@ import math
 from enum import Enum
 import random
 
-MAX_AMONT_TREE = 8 # 8 brings me to / 7 brings me to
+MAX_AMONT_TREE = 6
 COMPLETE_TIME = 22
 
 def debug(*s):
@@ -109,12 +109,10 @@ class Board:
             cell_index, richness, *neigh = map(int, input().split())
             self.append(Cell(cell_index, richness, neigh))
 
-    def reset_cells(self):
+    def get_input(self):
+        # reset
         for cell in self:cell.reset()
         self.trees = []
-
-    def get_input(self):
-        self.reset_cells()
         for _ in range(int(input())):
             cell_index, size, is_mine, is_dormant = map(int, input().split())
             self[cell_index].tree = Tree(size, is_mine, is_dormant)
@@ -122,10 +120,9 @@ class Board:
 
 
 # UTILS
-
     def compute_tree_neigh(self):
         for cell in self:
-            if cell.tree and cell.tree.is_mine:
+            if cell.tree:
                 for n in cell.neighbors:
                     if n >= 0:
                         self[n].tree_neigh += 1
