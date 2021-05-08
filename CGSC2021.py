@@ -91,6 +91,17 @@ class Board:
     def append(self, stuff):
         return self.board.append(stuff)
 
+    def __iter__(self):
+        self.n = 0
+        return self
+
+    def __next__(self):
+        if self.n < self.size:
+            self.n += 1
+            return self[self.n - 1]
+        else:
+            raise StopIteration
+
 # INPUT
     def get_first_input(self):
         self.size = int(input())
@@ -99,32 +110,31 @@ class Board:
             self.append(Cell(cell_index, richness, neigh))
 
     def reset_cells(self):
-        for cell in self.board:cell.reset()
+        for cell in self:cell.reset()
         self.trees = []
 
     def get_input(self):
         self.reset_cells()
         for _ in range(int(input())):
             cell_index, size, is_mine, is_dormant = map(int, input().split())
-            self.board[cell_index].tree = Tree(size, is_mine, is_dormant)
+            self[cell_index].tree = Tree(size, is_mine, is_dormant)
             self.trees.append(Tree(size, is_mine, is_dormant)) # I should not need that...
 
 
 # UTILS
-    def get(self, cell_id):
-        return self.board[cell_id] if cell_id != -1 else None
 
     def compute_tree_neigh(self):
-        for cell in self.board:
+        for cell in self:
             if cell.tree and cell.tree.is_mine:
                 for n in cell.neighbors:
-                    if self.get(n):self.get(n).tree_neigh += 1
+                    if n >= 0:
+                        self[n].tree_neigh += 1
 
     def compute_shadows(self):
         pass
 
     def count_my_trees(self):
-        return sum([(cell.tree != None and cell.tree.is_mine) for cell in self.board])
+        return sum([(cell.tree != None and cell.tree.is_mine) for cell in self])
 
 
 class Game:
@@ -181,8 +191,8 @@ class Game:
         self.possible_actions = seed_actions + grow_actions
 
         board.compute_tree_neigh()
-        self.possible_actions.sort(key=lambda x:board.get(x.target_cell_id).tree_neigh) # first the one with the less neigh
-        self.possible_actions.sort(key=lambda x:board.get(x.target_cell_id).richness, reverse=True) # first the richest
+        self.possible_actions.sort(key=lambda x:board[x.target_cell_id].tree_neigh) # first the one with the less neigh
+        self.possible_actions.sort(key=lambda x:board[x.target_cell_id].richness, reverse=True) # first the richest
 
         debug([po for po in self.possible_actions])
 
