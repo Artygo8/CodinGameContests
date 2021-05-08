@@ -3,8 +3,8 @@ import math
 from enum import Enum
 import random
 
-DAYS_TO_PLANT = 18
-MAX_AMONT_TREE = 8
+DAYS_TO_PLANT = 6
+MAX_AMONT_TREE = 36
 COMPLETE_TIME = 22
 
 def debug(*s):
@@ -95,13 +95,8 @@ class Game:
         self.possible_actions.clear()
         for _ in range(int(input())):
             action = Action.parse(input())
-            if action.type == ActionType.WAIT:
-                pass
-            elif action.type == ActionType.COMPLETE:
-                self.possible_actions = [action] + self.possible_actions 
-            else:
+            if action.type != ActionType.WAIT:
                 self.possible_actions.append(action)
-
 
     def compute_next_action(self):
         debug([po for po in self.possible_actions])
@@ -112,12 +107,18 @@ class Game:
                 self.possible_actions.pop(0)
 
         # remove COMPLETE
-        if self.day < COMPLETE_TIME and sum([(tree.size == 3, 0)[tree.is_mine] for tree in self.trees]) < 4:
+        if self.day < COMPLETE_TIME and (sum([(tree.size == 3, 0)[tree.is_mine] for tree in self.trees]) < 4):
             while self.possible_actions and self.possible_actions[0].type == ActionType.COMPLETE:
                 self.possible_actions.pop(0)
 
+        # order by case number
+        self.possible_actions.sort(key=lambda x:x.target_cell_id)
+        debug([po for po in self.possible_actions])
 
-        return self.possible_actions[0] if self.possible_actions else "WAIT"
+        # Put COMPLETE as First
+        complete_actions = [action for action in self.possible_actions if action.type == ActionType.COMPLETE]
+
+        return complete_actions[0] if complete_actions else (self.possible_actions[0] if self.possible_actions else "WAIT")
 
 
 game = Game()
