@@ -3,7 +3,7 @@ import math
 from enum import Enum
 import random
 
-MAX_AMONT_TREE = 6
+MAX_AMONT_TREE = 8
 COMPLETE_TIME = 22
 
 def debug(*s):
@@ -180,7 +180,7 @@ class Game:
             complete_actions = []
 
         # remove SEED
-        if board.count_my_trees() >= MAX_AMONT_TREE - self.day // 4:
+        if board.count_my_trees() >= MAX_AMONT_TREE - self.day // 3:
             seed_actions = []
 
         # sort
