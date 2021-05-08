@@ -3,7 +3,7 @@ import math
 from enum import Enum
 import random
 
-MAX_AMONT_TREE = 8
+MAX_AMONT_TREE = 7
 COMPLETE_TIME = 22
 
 def debug(*s):
@@ -220,8 +220,8 @@ class Game:
 
         # remove COMPLETE
         if self.day < COMPLETE_TIME and me.score < foe.score + 20 \
-            and sum([(board[pos].size == 3, 0)[board[pos].is_mine] for pos in board.tree_pos]) < 5 \
-                and not all([board[pos].size == 3 for pos in board.tree_pos if board[pos].is_mine]):
+            and not all([board[pos].size == 3 for pos in board.tree_pos if board[pos].is_mine]):
+            # and sum([(board[pos].size == 3, 0)[board[pos].is_mine] for pos in board.tree_pos]) < 5 \
             complete_actions = []
 
         # remove SEED
