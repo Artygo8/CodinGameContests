@@ -5,8 +5,8 @@ import random
 
 # I was 945th
 
-DAYS_TO_SEED = 6
-MAX_AMONT_TREE = 7
+DAYS_TO_SEED = 5
+MAX_AMONT_TREE = 5
 COMPLETE_TIME = 23
 
 def debug(*s):
@@ -242,12 +242,13 @@ class Board:
 #  \____|\__,_|_| |_| |_|\___|
 #                             
 class Game:
+
+    global day
+
     def __init__(self):
-        self.day = 0
         self.nutrients = 0
 
     def get_input(self):
-        self.day = int(input())
         self.nutrients = int(input())
         me.update(*map(int, input().split()))
         foe.update(*map(int, input().split()))
@@ -263,19 +264,18 @@ class Game:
         seed_actions = [action for action in me.possible_actions if action.type == AT.SEED]
         grow_actions = [action for action in me.possible_actions if action.type == AT.GROW]
         # remove COMPLETE
-        if self.day < COMPLETE_TIME and me.score < foe.score + 20:
+        if day < COMPLETE_TIME and me.score < foe.score + 20:
             complete_actions = []
 
         # remove SEED
-        if self.day > DAYS_TO_SEED and me.sun < me.current_total_cost(board):
+        if len(me.trees) > MAX_AMONT_TREE and me.sun < me.current_total_cost(board):
             seed_actions = []
+        seed_actions = [seed for seed in seed_actions if board[seed.target_cell_id].tree_neigh < 3]
+
 
         # sort
         complete_actions.sort(key=lambda x:x.target_cell_id, reverse=True)
         self.possible_actions = seed_actions + grow_actions
-
-        board.compute_tree_neigh()
-        board.compute_shadows(self.day)
 
         self.possible_actions.sort(key=lambda x:board[x.target_cell_id].tree_neigh) # first the one with the less neigh
         self.possible_actions.sort(key=lambda x:board[x.target_cell_id].richness, reverse=True) # first the richest
@@ -292,12 +292,14 @@ foe = Player()
 
 while True:
 
+    day = int(input())
     game.get_input()
 
     debug("nut =", game.nutrients, ", ")
     debug("me:", me)
     debug("foe:", foe)
 
-
+    board.compute_tree_neigh()
+    board.compute_shadows(day)
 
     print(game.basic_compute_next_action())
