@@ -10,40 +10,91 @@ def debug(*s):
     print(*s, file=sys.stderr, flush=True)
 
 
-class ActionType(Enum):
+# Action Type
+class AT(Enum):
     WAIT = "WAIT"
     SEED = "SEED"
     GROW = "GROW"
     COMPLETE = "COMPLETE"
 
 
-# I should have all the infos on my cells.
+#  ____  _                       
+# |  _ \| | __ _ _   _  ___ _ __ 
+# | |_) | |/ _` | | | |/ _ \ '__|
+# |  __/| | (_| | |_| |  __/ |   
+# |_|   |_|\__,_|\__, |\___|_|   
+#                |___/           
+
+class Player:
+    def __init__(self):
+        self.possible_actions = []
+        self.sun = 0
+        self.score = 0
+        self.is_waiting = 0
+
+    def update(self, sun, score, is_waiting=0):
+        self.sun = sun
+        self.score = score
+        self.is_waiting = is_waiting
+
+    def get_input_actions(self):
+        # Possible actions, probably useless
+        self.possible_actions.clear()
+        for _ in range(int(input())):
+            action = Action.parse(input())
+            if action.type != AT.WAIT:
+                self.possible_actions.append(action)
+
+    def compute_possible_actions(self):
+        pass
+
+
+#   ____     _ _ 
+#  / ___|___| | |
+# | |   / _ \ | |
+# | |__|  __/ | |
+#  \____\___|_|_|
+#                
+
 class Cell:
-    def __init__(self, cell_index, richness, neighbors):
+    def __init__(self, cell_index, richness, *neighbors):
         self.cell_index = cell_index
         self.richness = richness
-        self.neighbors = neighbors
-        self.tree = None
-        self.shadow = 0 # need to place the shadows
-        self.tree_neigh = 0 # to verify
+        self.neighbors = list(neighbors)
+
+        self.tree = False
+        self.size = 0
+        self.is_mine = 0
+        self.is_dormant = 0 # after any action, becomes dormant
+
+        self.shadow = 0
+        self.tree_neigh = 0
+
+    def __str__(self):
+        return f"Cell {self.cell_index} r({self.richness}) s({self.shadow}) n({self.neighbors}):" + f"T size = {self.size}, is {('not','')[self.is_mine]} mine {('','(dormant)')[self.is_dormant]}:" if self.tree else ''
+
+    def put_tree(self, size, is_mine, is_dormant):
+        self.tree = True
+        self.size = size
+        self.is_mine = is_mine
+        self.is_dormant = is_dormant
 
     def sun_points(self):
         if self.tree and self.tree.is_mine and self.shadow < self.tree.size and self.richness:
             return self.tree.size + (self.richness - 1) * 2
 
     def reset(self):
-        self.tree = None
+        self.tree = False
         self.shadow = 0
         self.tree_neigh = 0
 
 
-class Tree:
-    def __init__(self, size, is_mine, is_dormant):
-        # self.cell_index = cell_index
-        self.size = size
-        self.is_mine = is_mine
-        self.is_dormant = is_dormant # after any action, becomes dormant
-
+#     _        _   _             
+#    / \   ___| |_(_) ___  _ __  
+#   / _ \ / __| __| |/ _ \| '_ \ 
+#  / ___ \ (__| |_| | (_) | | | |
+# /_/   \_\___|\__|_|\___/|_| |_|
+#                                
 
 class Action:
     def __init__(self, type, target_cell_id=None, origin_cell_id=None):
@@ -52,12 +103,8 @@ class Action:
         self.origin_cell_id = origin_cell_id or target_cell_id
 
     def __str__(self):
-        if self.type == ActionType.WAIT:
-            return 'WAIT'
-        elif self.type == ActionType.SEED:
-            return f'SEED {self.origin_cell_id} {self.target_cell_id}'
-        else:
-            return f'{self.type.name} {self.origin_cell_id}'
+        return self.type.name + (f' {self.origin_cell_id}','')[self.type == AT.WAIT] \
+            + ('', f' {self.target_cell_id}')[self.type == AT.SEED]
 
     def __repr__(self):
         return self.__str__()
@@ -65,21 +112,28 @@ class Action:
     @staticmethod
     def parse(action_string):
         split = action_string.split(' ')
-        if split[0] == ActionType.WAIT.name:
-            return Action(ActionType.WAIT)
-        if split[0] == ActionType.SEED.name:
-            return Action(ActionType.SEED, int(split[2]), int(split[1]))
-        if split[0] == ActionType.GROW.name:
-            return Action(ActionType.GROW, int(split[1]))
-        if split[0] == ActionType.COMPLETE.name:
-            return Action(ActionType.COMPLETE, int(split[1]))
+        if split[0] == AT.WAIT.name:
+            return Action(AT.WAIT)
+        if split[0] == AT.SEED.name:
+            return Action(AT.SEED, int(split[2]), int(split[1]))
+        if split[0] == AT.GROW.name:
+            return Action(AT.GROW, int(split[1]))
+        if split[0] == AT.COMPLETE.name:
+            return Action(AT.COMPLETE, int(split[1]))
 
+
+#  ____                      _ 
+# | __ )  ___   __ _ _ __ __| |
+# |  _ \ / _ \ / _` | '__/ _` |
+# | |_) | (_) | (_| | | | (_| |
+# |____/ \___/ \__,_|_|  \__,_|
+#                              
 
 class Board:
     def __init__(self):
         self.board = []
         self.size = 0
-        self.trees = []
+        self.tree_pos = []
 
 # ACCESS
     def __getitem__(self, key):
@@ -106,77 +160,68 @@ class Board:
     def get_first_input(self):
         self.size = int(input())
         for _ in range(self.size):
-            cell_index, richness, *neigh = map(int, input().split())
-            self.append(Cell(cell_index, richness, neigh))
+            self.append(Cell(*[int(i) for i in input().split()]))
 
     def get_input(self):
         # reset
-        for cell in self:cell.reset()
-        self.trees = []
+        for cell in self:
+            cell.reset()
+        self.tree_pos = []
+
         for _ in range(int(input())):
             cell_index, size, is_mine, is_dormant = map(int, input().split())
-            self[cell_index].tree = Tree(size, is_mine, is_dormant)
-            self.trees.append(Tree(size, is_mine, is_dormant)) # I should not need that...
+            self[cell_index].put_tree(size, is_mine, is_dormant)
+            self.tree_pos.append(cell_index) # I should not need that...
 
-
-# UTILS
+# COMPUTE
     def compute_tree_neigh(self):
-        for cell in self:
-            if cell.tree:
-                for n in cell.neighbors:
-                    if n >= 0:
-                        self[n].tree_neigh += 1
+        for pos in self.tree_pos:
+            for n in self[pos].neighbors:
+                if n >= 0:
+                    self[n].tree_neigh += 1
 
-    def compute_shadows(self):
-        pass
+    def compute_shadows(self, day):
+        for pos in self.tree_pos:
+            height = self[pos].size
+            for _ in range(height):
+                pos = self[pos].neighbors[day % 6]
+                if pos == -1:
+                    break
+                self[pos].shadow = height
 
+# Utils
     def count_my_trees(self):
-        return sum([(cell.tree != None and cell.tree.is_mine) for cell in self])
+        return sum([(cell.tree and cell.is_mine) for cell in self])
 
 
 class Game:
     def __init__(self):
         self.day = 0
         self.nutrients = 0
-        # self.trees = []
-        self.possible_actions = []
-        self.my_sun = 0
-        self.my_score = 0
-        self.foe_sun = 0
-        self.foe_score = 0
-        self.foe_is_waiting = 0
-
 
     def get_input(self):
         self.day = int(input())
         self.nutrients = int(input())
-        self.my_sun, self.my_score = map(int, input().split())
-        self.foe_sun, self.foe_score, self.foe_is_waiting = map(int, input().split())
-
+        me.update(*map(int, input().split()))
+        foe.update(*map(int, input().split()))
         board.get_input()
-
-        self.possible_actions.clear()
-        for _ in range(int(input())):
-            action = Action.parse(input())
-            if action.type != ActionType.WAIT:
-                self.possible_actions.append(action)
+        me.get_input_actions()
 
     def compute_next_action(self):
-        debug([po for po in self.possible_actions])
+        debug([po for po in me.possible_actions])
 
         # order by case number
-        self.possible_actions.sort(key=lambda x:x.target_cell_id, reverse=True)
+        me.possible_actions.sort(key=lambda x:x.target_cell_id, reverse=True)
 
         # Separate Actions
-        complete_actions = [action for action in self.possible_actions if action.type == ActionType.COMPLETE]
-        seed_actions = [action for action in self.possible_actions if action.type == ActionType.SEED]
-        grow_actions = [action for action in self.possible_actions if action.type == ActionType.GROW]
+        complete_actions = [action for action in me.possible_actions if action.type == AT.COMPLETE]
+        seed_actions = [action for action in me.possible_actions if action.type == AT.SEED]
+        grow_actions = [action for action in me.possible_actions if action.type == AT.GROW]
 
         # remove COMPLETE
-        debug("all are 3 ?", [tree.size == 3 for tree in board.trees if tree.is_mine])
-        if self.day < COMPLETE_TIME and self.my_score < self.foe_score + 20 \
-            and sum([(tree.size == 3, 0)[tree.is_mine] for tree in board.trees]) < 5 \
-                and not all([tree.size == 3 for tree in board.trees if tree.is_mine]):
+        if self.day < COMPLETE_TIME and me.score < foe.score + 20 \
+            # and sum([(board[pos].size == 3, 0)[board[pos].is_mine] for pos in board.tree_pos]) < 5 \
+                and not all([board[pos].size == 3 for pos in board.tree_pos if board[pos].is_mine]):
             complete_actions = []
 
         # remove SEED
@@ -188,6 +233,9 @@ class Game:
         self.possible_actions = seed_actions + grow_actions
 
         board.compute_tree_neigh()
+        board.compute_shadows(self.day)
+        for cell in board:
+            if cell.shadow:debug(cell)
         self.possible_actions.sort(key=lambda x:board[x.target_cell_id].tree_neigh) # first the one with the less neigh
         self.possible_actions.sort(key=lambda x:board[x.target_cell_id].richness, reverse=True) # first the richest
 
@@ -200,8 +248,10 @@ game = Game()
 board = Board()
 board.get_first_input() # only the first time
 
+me = Player()
+foe = Player()
 
 while True:
-    debug("nutrients =", game.nutrients)
+    debug("nut =", game.nutrients, ", ")
     game.get_input()
     print(game.compute_next_action())
