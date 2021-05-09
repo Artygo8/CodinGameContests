@@ -116,7 +116,7 @@ class Cell:
     def __str__(self):
         return f"Cell {self.cell_index} r({self.richness}) s({self.shadow}) n({self.neighbors}):" + f"T size = {self.size}, is {('not','')[self.is_mine]} mine {('','(dormant)')[self.is_dormant]}:" if self.tree else ''
 
-    def put_tree(self, size, is_mine, is_dormant):
+    def put_tree(self, size=0, is_mine=1, is_dormant=1):
         self.tree = True
         self.size = size
         self.is_mine = is_mine
@@ -128,6 +128,9 @@ class Cell:
 
     def reset(self):
         self.tree = False
+        self.size = 0
+        self.is_mine = 0
+        self.is_dormant = 0 # after any action, becomes dormant
         self.shadow = 0
         self.tree_neigh = 0
 
@@ -154,17 +157,12 @@ class Action:
     @staticmethod
     def parse(action_string):
         split = action_string.split(' ')
-        if split[0] == AT.WAIT.name:
-            return Action(AT.WAIT)
-        if split[0] == AT.SEED.name:
-            return Action(AT.SEED, int(split[2]), int(split[1]))
-        if split[0] == AT.GROW.name:
-            return Action(AT.GROW, int(split[1]))
-        if split[0] == AT.COMPLETE.name:
-            return Action(AT.COMPLETE, int(split[1]))
+        return Action(AT[split[0]], *map(int, split[1:][::-1]))
 
-    def resulting_board():
-        pass
+    def price(self, player, bd): # if sleep enters, crash.
+        nb_by_size = [sum(pos for pos in self.trees if bd[pos].size == i) for i in range(5)] # 5 to have 0
+        height = bd[target_cell_id].size
+        return ((0, 3, 7, 4)[height] + nb_by_size[1:][height], 1)[self.type == AT.SEED]
 
 
 #  ____                      _ 
@@ -247,18 +245,22 @@ class Board:
                 if self[pos].shadow < height:
                     self[pos].shadow = height
 
-    def compute_sun_points(self, player, day):
+# CALCULATE
+    def sun_points(self, player, day):
         self.compute_shadows(day)
-        total = 0
-        for pos in player.trees:
-            total += self[pos].sun_points()
-    return total
+        return sum(self[pos].sun_points() for pos in player.trees)
 
-    def compute_sun_points_over6days(self, player):
-        total = 0
-        for day in range(6):
-            total += compute_sun_points(player, day)
-        return total
+    def sun_points_over6days(self, player):
+        return sum(sun_points(player, day) for day in range(6))
+
+    def action(self, action): # care, it only works for ME (put_tree)
+        if action.type == AT.SEED:
+            self[action.target_cell_id].put_tree()
+        elif action.type == AT.COMPLETE:
+            self[action.target_cell_id].reset()
+        elif action.type == AT.GROW:
+            self[action.target_cell_id].size += 1
+        self[action.target_cell_id].is_dormant = True
 
 # Utils
     def count_my_trees(self):
