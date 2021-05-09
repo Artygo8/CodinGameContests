@@ -1,12 +1,12 @@
 import sys
 import math
 from enum import Enum
-import random
+import random, copy
 
 # I was 945th
 
 DAYS_TO_SEED = 5
-MAX_AMONT_TREE = 5
+MAX_AMONT_TREE = 6
 COMPLETE_TIME = 23
 
 def debug(*s):
@@ -19,6 +19,7 @@ class AT(Enum):
     SEED = "SEED"
     GROW = "GROW"
     COMPLETE = "COMPLETE"
+
 
 #  ____  _                       
 # |  _ \| | __ _ _   _  ___ _ __ 
@@ -90,6 +91,7 @@ class Player:
                 nb_by_size[1] += 1
         return total
 
+
 #   ____     _ _ 
 #  / ___|___| | |
 # | |   / _ \ | |
@@ -122,8 +124,7 @@ class Cell:
         self.is_dormant = is_dormant
 
     def sun_points(self):
-        if self.tree and self.tree.is_mine and self.shadow < self.tree.size and self.richness:
-            return self.tree.size + (self.richness - 1) * 2
+        return (0, self.tree.size + (self.richness - 1) * 2)[self.tree and self.tree.is_mine and self.shadow < self.tree.size]
 
     def reset(self):
         self.tree = False
@@ -162,6 +163,9 @@ class Action:
         if split[0] == AT.COMPLETE.name:
             return Action(AT.COMPLETE, int(split[1]))
 
+    def resulting_board():
+        pass
+
 
 #  ____                      _ 
 # | __ )  ___   __ _ _ __ __| |
@@ -183,9 +187,6 @@ class Board:
     def __setitem__(self, key):
         return self.board[key]
 
-    def append(self, stuff):
-        return self.board.append(stuff)
-
     def __iter__(self):
         self.n = 0
         return self
@@ -196,6 +197,17 @@ class Board:
             return self[self.n - 1]
         else:
             raise StopIteration
+
+    def __copy__(self):
+        bd = Board()
+        for cell in self:
+            bd.append(cell.copy())
+        bd.size = self.size
+        bd.tree_pos = list(self.tree_pos)
+        return bd
+
+    def append(self, stuff):
+        return self.board.append(stuff)
 
 # INPUT
     def get_first_input(self):
@@ -222,13 +234,31 @@ class Board:
                     self[n].tree_neigh += 1
 
     def compute_shadows(self, day):
+        # reset the shadows
+        for cell in self:
+            cell.shadow = 0
+        # compute shadows
         for pos in self.tree_pos:
             height = self[pos].size
             for _ in range(height):
                 pos = self[pos].neighbors[day % 6]
                 if pos == -1:
                     break
-                self[pos].shadow = height
+                if self[pos].shadow < height:
+                    self[pos].shadow = height
+
+    def compute_sun_points(self, player, day):
+        self.compute_shadows(day)
+        total = 0
+        for pos in player.trees:
+            total += self[pos].sun_points()
+    return total
+
+    def compute_sun_points_over6days(self, player):
+        total = 0
+        for day in range(6):
+            total += compute_sun_points(player, day)
+        return total
 
 # Utils
     def count_my_trees(self):
