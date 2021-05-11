@@ -29,9 +29,10 @@ class Simulation:
     def one_turn_simu(self, board, player, iday):
 
         player.possible_actions = board.compute_possible_actions(player)
+        # total_cost = board.current_total_cost(player)
         best_action = Action.parse('WAIT')
 
-        benef = -10000 # nombre d'arbres  * 10 + sun_points
+        benef = 10000 # smallest
 
         debug(player.possible_actions)
         debug(player.sun)
@@ -49,9 +50,11 @@ class Simulation:
                 debug(action, "---", end_sun)
 
                 # THE MAGIC IS HERE
-                cur_benef = bd.count_trees(cur_player) - bd.current_total_cost(cur_player)
+                cur_benef = end_sun
+                if action.type == AT.SEED and iday < 13:
+                    cur_benef = iday * 4 if iday * 4 < cur_benef else cur_benef
 
-                if end_sun > bd.current_total_cost(cur_player) and cur_benef > benef:
+                if end_sun >= bd.current_total_cost(cur_player) and cur_benef < benef:
                     debug("OK !")
                     benef = cur_benef
                     best_action = action
