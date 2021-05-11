@@ -6,7 +6,7 @@ import random, copy
 # I was 945th
 
 DAYS_TO_SEED = 5
-MAX_AMONT_TREE = 6
+MAX_AMONT_TREE = 8
 COMPLETE_TIME = 23
 
 def debug(*s):
@@ -21,6 +21,44 @@ class AT(Enum):
     COMPLETE = "COMPLETE"
 
 
+class Simulation:
+
+    def __init__(self):
+        self.best_score = -1
+
+    def one_turn_simu(self, board, player, iday):
+
+        player.possible_actions = board.compute_possible_actions(player)
+        best_action = Action.parse('WAIT')
+
+        benef = -10000 # nombre d'arbres  * 10 + sun_points
+
+        debug(player.possible_actions)
+        debug(player.sun)
+
+        for action in player.possible_actions:
+            bd = board.__copy__()
+            cur_player = player.__copy__()
+
+            price = action.price(cur_player, bd)
+
+            if cur_player.sun >= price:
+                bd.apply(action, cur_player)
+
+                end_sun = bd.sun_points_at_end(cur_player, iday)
+                debug(action, "---", end_sun)
+
+                # THE MAGIC IS HERE
+                cur_benef = bd.count_trees(cur_player) - bd.current_total_cost(cur_player)
+
+                if end_sun > bd.current_total_cost(cur_player) and cur_benef > benef:
+                    debug("OK !")
+                    benef = cur_benef
+                    best_action = action
+
+        return best_action
+
+
 #  ____  _                       
 # |  _ \| | __ _ _   _  ___ _ __ 
 # | |_) | |/ _` | | | |/ _ \ '__|
@@ -29,21 +67,23 @@ class AT(Enum):
 #                |___/           
 
 class Player:
-    def __init__(self):
+    def __init__(self, itsme, sun=0, score=0, is_waiting=False):
         self.possible_actions = []
-        self.sun = 0
-        self.score = 0
-        self.is_waiting = 0
-        self.trees = [] # these are positions
+        self.itsme = itsme
+        self.sun = sun
+        self.score = score
+        self.is_waiting = is_waiting
 
     def __str__(self):
-        return f"{[tree for tree in self.trees]}"
+        return f'{("foe", "me")[self.itsme]} - score={self.score} - sun= {self.sun}'
+
+    def __copy__(self):
+        return Player(self.itsme, self.sun, self.score, self.is_waiting)
 
     def update(self, sun, score, is_waiting=0):
         self.sun = sun
         self.score = score
         self.is_waiting = is_waiting
-        self.trees.clear()
 
     def get_input_actions(self):
         # Possible actions, probably useless
@@ -52,45 +92,6 @@ class Player:
             action = Action.parse(input())
             if action.type != AT.WAIT:
                 self.possible_actions.append(action)
-
-    def compute_possible_actions(self, bd):
-        computed_actions = []
-        for pos in self.trees:
-            if bd[pos].is_dormant:
-                continue
-            # seedables
-            seedable = set()
-            for _ in range(bd[pos].size):
-                for neigh in set(bd[pos].neighbors).union(seedable):
-                    seedable.add(neigh)
-            for s in seedable:
-                if bd[s].tree == False:
-                    computed_actions.append(Action(AT.SEED, s, pos))
-            # complete
-            if bd[pos].size == 3:
-                computed_actions.append(Action(AT.COMPLETE, pos))
-            # grow
-            else:
-                computed_actions.append(Action(AT.GROW, pos))
-        return computed_actions
-
-    def current_total_cost(self, bd):
-        total = 0
-        nb_by_size = [sum(pos for pos in self.trees if bd[pos].size == i) for i in range(4)]
-        for pos in self.trees:
-            if bd[pos].size == 3:
-                total += 4
-            if bd[pos].size == 2:
-                total += 7 + nb_by_size[3]
-                nb_by_size[3] += 1
-            if bd[pos].size == 1:
-                total += 3 + nb_by_size[2]
-                nb_by_size[2] += 1
-            if bd[pos].size == 0:
-                total += 1 + nb_by_size[1]
-                nb_by_size[1] += 1
-        return total
-
 
 #   ____     _ _ 
 #  / ___|___| | |
@@ -111,20 +112,40 @@ class Cell:
         self.is_dormant = 0 # after any action, becomes dormant
 
         self.shadow = 0
-        self.tree_neigh = 0
+        self.tree_neigh = 0 # to suppress
 
     def __str__(self):
         return f"Cell {self.cell_index} r({self.richness}) s({self.shadow}) n({self.neighbors}):" + f"T size = {self.size}, is {('not','')[self.is_mine]} mine {('','(dormant)')[self.is_dormant]}:" if self.tree else ''
 
-    def put_tree(self, size=0, is_mine=1, is_dormant=1):
+    def __copy__(self):
+        new = Cell(self.cell_index, self.richness, *self.neighbors)
+        new.tree = self.tree
+        new.size = self.size
+        new.is_mine = self.is_mine
+        new.is_dormant = self.is_dormant
+        new.shadow = self.shadow
+        new.tree_neigh = self.tree_neigh # probably wont need that
+        return new
+
+    def put_tree(self, size=0, is_mine=1, is_dormant=0):
         self.tree = True
         self.size = size
         self.is_mine = is_mine
-        (foe, me)[is_mine].trees.append(self.cell_index)
         self.is_dormant = is_dormant
 
+    def seed(self, player):
+        self.put_tree(size=0, is_mine=player.itsme, is_dormant=True) 
+
+    def grow(self, player):
+        self.size += 1
+
+    def complete(self, player):
+        self.reset()
+        player.score += game.nutrients # not very clever
+
     def sun_points(self):
-        return (0, self.tree.size + (self.richness - 1) * 2)[self.tree and self.tree.is_mine and self.shadow < self.tree.size]
+        if self.size == 0:return 0
+        return (0, self.size + (self.richness - 1) * 2)[self.tree and self.is_mine and (self.shadow < self.size or self.shadow == 0)]
 
     def reset(self):
         self.tree = False
@@ -160,8 +181,8 @@ class Action:
         return Action(AT[split[0]], *map(int, split[1:][::-1]))
 
     def price(self, player, bd): # if sleep enters, crash.
-        nb_by_size = [sum(pos for pos in self.trees if bd[pos].size == i) for i in range(5)] # 5 to have 0
-        height = bd[target_cell_id].size
+        nb_by_size = [sum(cell.tree for cell in bd if (cell.size == i and cell.is_mine == player.itsme)) for i in range(5)] # 5 to have 0
+        height = bd[self.target_cell_id].size
         return ((0, 3, 7, 4)[height] + nb_by_size[1:][height], 1)[self.type == AT.SEED]
 
 
@@ -196,10 +217,22 @@ class Board:
         else:
             raise StopIteration
 
+    def __str__(self):
+        s=self
+        return f'''
+     [{s[25].size if s[25].tree else ' '}|{s[24].size if s[24].tree else ' '}|{s[23].size if s[23].tree else ' '}|{s[22].size if s[22].tree else ' '}]
+    [{s[26].size if s[26].tree else ' '}|{s[11].size if s[11].tree else ' '}|{s[10].size if s[10].tree else ' '}|{s[9].size if s[9].tree else ' '}|{s[21].size if s[21].tree else ' '}]
+   [{s[27].size if s[27].tree else ' '}|{s[12].size if s[12].tree else ' '}|{s[3].size if s[3].tree else ' '}|{s[2].size if s[2].tree else ' '}|{s[8].size if s[8].tree else ' '}|{s[20].size if s[20].tree else ' '}]
+  [{s[28].size if s[28].tree else ' '}|{s[13].size if s[13].tree else ' '}|{s[4].size if s[4].tree else ' '}|{s[0].size if s[0].tree else ' '}|{s[1].size if s[1].tree else ' '}|{s[7].size if s[7].tree else ' '}|{s[19].size if s[19].tree else ' '}]
+   [{s[29].size if s[29].tree else ' '}|{s[14].size if s[14].tree else ' '}|{s[5].size if s[5].tree else ' '}|{s[6].size if s[6].tree else ' '}|{s[18].size if s[18].tree else ' '}|{s[36].size if s[36].tree else ' '}]
+    [{s[30].size if s[30].tree else ' '}|{s[15].size if s[15].tree else ' '}|{s[16].size if s[16].tree else ' '}|{s[17].size if s[17].tree else ' '}|{s[35].size if s[35].tree else ' '}]
+     [{s[31].size if s[31].tree else ' '}|{s[32].size if s[32].tree else ' '}|{s[33].size if s[33].tree else ' '}|{s[34].size if s[34].tree else ' '}]
+'''
+
     def __copy__(self):
         bd = Board()
         for cell in self:
-            bd.append(cell.copy())
+            bd.append(cell.__copy__())
         bd.size = self.size
         bd.tree_pos = list(self.tree_pos)
         return bd
@@ -245,26 +278,64 @@ class Board:
                 if self[pos].shadow < height:
                     self[pos].shadow = height
 
+
+    def compute_possible_actions(self, player):
+        computed_actions = []
+        for cell in self:
+            # seedables
+            seedable = set()
+            for _ in range(cell.size):
+                for neigh in set(cell.neighbors).union(seedable):
+                    seedable.add(neigh)
+            for seed in seedable:
+                if self[seed].tree == False and self[seed].richness > 0 and seed != -1 and cell.is_mine == player.itsme:
+                    computed_actions.append(Action(AT.SEED, seed, cell.cell_index))
+            # complete + grow
+            if cell.is_mine == player.itsme and cell.tree:
+                computed_actions.append(Action((AT.GROW, AT.COMPLETE)[cell.size == 3], cell.cell_index))
+        return computed_actions
+
 # CALCULATE
-    def sun_points(self, player, day):
-        self.compute_shadows(day)
-        return sum(self[pos].sun_points() for pos in player.trees)
+    def current_total_cost(self, player): # for trees
+        total = 0
+        nb_by_size = [sum(cell.tree for cell in self if (cell.size == i and cell.is_mine == player.itsme)) for i in range(4)]
+        for cell in self:
+            if cell.tree and cell.is_mine == player.itsme:
+                if cell.size >= 3:
+                    total += 4
+                if cell.size >= 2:
+                    total += 7 + nb_by_size[3]
+                    nb_by_size[3] += 1
+                if cell.size >= 1:
+                    total += 3 + nb_by_size[2]
+                    nb_by_size[2] += 1
+                if cell.size >= 0:
+                    total += 1 + nb_by_size[1]
+                    nb_by_size[1] += 1
+        return total
+
+    def sun_points(self, player, iday):
+        self.compute_shadows(iday)
+        return sum(cell.sun_points() for cell in self)
 
     def sun_points_over6days(self, player):
-        return sum(sun_points(player, day) for day in range(6))
+        return [self.sun_points(player, iday) for iday in range(6)]
 
-    def action(self, action): # care, it only works for ME (put_tree)
+    def sun_points_at_end(self, player, iday):
+        sun_day_by_day = self.sun_points_over6days(player) * (24 // 6)
+        return sum(sun_day_by_day[iday:]) + player.sun
+
+    def apply(self, action, player): # care, it only works for ME (put_tree)
         if action.type == AT.SEED:
-            self[action.target_cell_id].put_tree()
+            self[action.target_cell_id].seed(player)
         elif action.type == AT.COMPLETE:
-            self[action.target_cell_id].reset()
+            self[action.target_cell_id].complete(player)
         elif action.type == AT.GROW:
-            self[action.target_cell_id].size += 1
-        self[action.target_cell_id].is_dormant = True
+            self[action.target_cell_id].grow(player)
+        self[action.origin_cell_id].is_dormant = True
 
-# Utils
-    def count_my_trees(self):
-        return sum([(cell.tree and cell.is_mine) for cell in self])
+    def count_trees(self, player):
+        return sum([(cell.tree and cell.is_mine == player.itsme) for cell in self])
 
 
 #   ____                      
@@ -316,22 +387,19 @@ class Game:
 
 
 game = Game()
+
 board = Board()
 board.get_first_input() # only the first time
 
-me = Player()
-foe = Player()
+simu = Simulation()
+
+me = Player(itsme=True)
+foe = Player(itsme=False)
 
 while True:
 
     day = int(input())
     game.get_input()
 
-    debug("nut =", game.nutrients, ", ")
-    debug("me:", me)
-    debug("foe:", foe)
-
-    board.compute_tree_neigh()
-    board.compute_shadows(day)
-
-    print(game.basic_compute_next_action())
+    # print(game.basic_compute_next_action())
+    print(simu.one_turn_simu(board, me, day))
