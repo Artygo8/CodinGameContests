@@ -4,7 +4,10 @@ import time
 import random
 from enum import Enum
 
+# trial 3.5
 
+MAX_AMONT_TREE = 13
+DIVIDER = 24 / (MAX_AMONT_TREE - 3)
 COMPLETE_TIME = 23
 
 
@@ -74,13 +77,13 @@ class Simulation:
 # class MCTS:
 
 
+
 #  ____  _
 # |  _ \| | __ _ _   _  ___ _ __
 # | |_) | |/ _` | | | |/ _ \ '__|
 # |  __/| | (_| | |_| |  __/ |
 # |_|   |_|\__,_|\__, |\___|_|
 #                |___/
-
 
 class Player:
     def __init__(self, itsme, sun=0, score=0, is_waiting=False):
@@ -160,8 +163,17 @@ class Cell:
     def complete(self, player):  # does not add the points.
         self.reset()
 
-    def sun_points(self, player):  # Shadows must be computed first
-        return (0, self.size + (self.richness - 1) * 2)[self.tree and self.size and self.is_mine == player.itsme and (self.shadow < self.size or self.shadow == 0)]
+    def sun_points(self, board, iday, compute_shadows=True):  # Shadows must be computed first
+        if compute_shadows:
+            board.compute_shadows(iday)
+        return (0, self.size + (self.richness - 1) * 2)[self.tree and self.size and self.is_mine and (self.shadow < self.size or self.shadow == 0)]
+
+    def sun_points_over6days(self, board):
+        return [self.sun_points(board, iday, compute_shadows=True) for iday in range(6)]
+
+    def sun_points_at_end(self, board, iday):  # does not add current sun points
+        sun_day_by_day = self.sun_points_over6days(board) * (24 // 6)
+        return sum(sun_day_by_day[iday:])
 
     def reset(self):
         self.tree = False
@@ -183,7 +195,7 @@ class Action:
     def __init__(self, type, target_cell_id=None, origin_cell_id=None):
         self.type = type
         self.target_cell_id = target_cell_id
-        self.origin_cell_id = origin_cell_id if origin_cell_id is not None else target_cell_id
+        self.origin_cell_id = origin_cell_id or target_cell_id
 
     def __str__(self):
         return self.type.name + (f' {self.origin_cell_id}', '')[self.type == AT.WAIT] \
@@ -203,6 +215,7 @@ class Action:
         nb_by_size = [sum(cell.tree for cell in bd if (cell.size == i and cell.is_mine == player.itsme)) for i in range(5)]  # 5 to have 0
         height = bd[self.target_cell_id].size
         return ((0, 3, 7, 4)[height] + nb_by_size[1:][height], 1)[self.type == AT.SEED]
+
 
 #  ____                      _
 # | __ )  ___   __ _ _ __ __| |
@@ -284,18 +297,6 @@ class Board:
                 if self[pos].shadow < height:
                     self[pos].shadow = height
 
-    def compute_potential_shadows(self, player):
-        for cell in self:
-            cell.shadow = 0
-        for day in range(6):
-            for pos in range(self.size):
-                if self[pos].is_mine == player.itsme and self[pos].tree:
-                    for i in range(3):
-                        pos = self[pos].neighbors[day % 6]
-                        if pos == -1:
-                            break
-                        self[pos].shadow += 3 - i
-
     def compute_possible_actions(self, player):
         computed_actions = [Action.parse('WAIT')]
         for cell in self:
@@ -330,10 +331,10 @@ class Board:
                     nb_by_size[1] += 1
         return total
 
-    def sun_points(self, player, iday, compute_shadows=False):
+    def sun_points(self, player, iday, compute_shadows=False):  # WTF PLAYER NOT USED
         if compute_shadows:
             self.compute_shadows(iday)
-        return sum(cell.sun_points(player) for cell in self)
+        return sum(cell.sun_points() for cell in self)
 
     def sun_points_over6days(self, player):
         return [self.sun_points(player, iday, compute_shadows=True) for iday in range(6)]
@@ -401,51 +402,44 @@ class Game:
         self.me.sun -= action.price(self.me, self.board)
 
     def compute_next_action(self):
+        debug([po for po in self.me.possible_actions])
+
         # order by case number
         self.me.possible_actions = [action for action in self.me.possible_actions if action.type != AT.WAIT]
+        self.me.possible_actions.sort(key=lambda x: x.target_cell_id, reverse=True)
 
+        # Separate Actions
         complete_actions = [action for action in self.me.possible_actions if action.type == AT.COMPLETE]
         seed_actions = [action for action in self.me.possible_actions if action.type == AT.SEED]
         grow_actions = [action for action in self.me.possible_actions if action.type == AT.GROW]
 
-        # remove SEED
-        if sum([cell.size == 0 for cell in self.board if cell.is_mine]):
-            seed_actions = []
-
-        seed_actions = [action for action in seed_actions if action.target_cell_id not in self.board.tree_neigh(self.me)]
-        seed_actions = [action for action in seed_actions if self.board[action.origin_cell_id].size >= 2]
-
-        debug("CA:", [self.gain_for_me(ca) for ca in complete_actions])
+        debug("before", [sum(self.board[ca.origin_cell_id].sun_points_over6days(self.board)) for ca in complete_actions])
 
         # remove COMPLETE
-        if self.me.score >= self.foe.score and self.day < 22:
-            complete_actions = []
+        if self.day < COMPLETE_TIME:
+            # and not all([cell.size == 3 for cell in self.board if cell.is_mine]):  # and sum([(cell.size == 3, 0)[cell.is_mine] for cell in self.board]) < 5 \
+            complete_actions = [ca for ca in complete_actions if sum(self.board[ca.origin_cell_id].sun_points_over6days(self.board)) < 18]  # on vire ceux qui ne rapportent pas des masses
+
+        debug("after", len(complete_actions))
+
+        debug("NUMBER OF TREES:", MAX_AMONT_TREE - (self.day / DIVIDER))
+        # remove SEED
+        if self.day > 20 or len([cell.is_mine for cell in self.board]) < MAX_AMONT_TREE - (self.day / DIVIDER):
+            seed_actions = []
+        # debug(self.board.tree_neigh(self.me))
+        seed_actions = [action for action in seed_actions if action.target_cell_id not in self.board.tree_neigh(self.me)]
 
         # sort
-        self.board.compute_potential_shadows(self.foe)
-        complete_actions.sort(key=lambda x: self.gain_for_me(x), reverse=True)
-        grow_actions.sort(key=lambda x: self.board[x.target_cell_id].size)
-        # debug({x.target_cell_id: self.board[x.target_cell_id].shadow for x in grow_actions})
-        grow_actions.sort(key=lambda x: self.gain_for_me(x), reverse=True)
-        self.board.compute_potential_shadows(self.me)
-        seed_actions.sort(key=lambda x: self.board[x.target_cell_id].richness, reverse=True)
-        seed_actions.sort(key=lambda x: self.board[x.target_cell_id].shadow)
+        complete_actions.sort(key=lambda x: x.target_cell_id, reverse=True)
 
-        # Put together
-        self.possible_actions = seed_actions + grow_actions
+        self.board.compute_shadows(self.day)
 
-        result = complete_actions[0] if complete_actions else (self.possible_actions[0] if self.possible_actions else Action.parse("WAIT"))
+        self.possible_actions = seed_actions + complete_actions + grow_actions
+        # self.possible_actions.sort(key=lambda x: self.board[x.target_cell_id].richness, reverse=True)  # first the richest
 
-        return result
+        # debug([po for po in self.possible_actions])
 
-    def gain_for_me(self, action):
-        new_game = self.__copy__()
-        my_gain = - sum(new_game.board.sun_points_over6days(new_game.me))
-        foe_gain = - sum(new_game.board.sun_points_over6days(new_game.foe))
-        new_game.apply(action)
-        my_gain += sum(new_game.board.sun_points_over6days(new_game.me))
-        foe_gain += sum(new_game.board.sun_points_over6days(new_game.foe))
-        return my_gain - foe_gain
+        return self.possible_actions[0] if self.possible_actions else "WAIT"
 
     def play(self):
 
