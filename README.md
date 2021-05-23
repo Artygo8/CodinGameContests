@@ -4,9 +4,9 @@ This contest was my 3rd on the platform. I had not alot of time to work on it be
 
 ## How I worked
 
-I coded in Python3, trying to be as concise as possible, abusing **OOP**.
-There are some dirty stuffs lying around, this is definitely not my cleanest code.
-The whole bot is **heuristic**, based on observations of how well my bot performed against the others.
+ - I coded in Python3, trying to be as concise as possible, abusing **OOP**.
+ - There are some dirty stuffs lying around, this is definitely not my cleanest code.
+ - The whole bot is **heuristic**, based on observations of how well my bot performed against the others.
 
 ## Possible improvements
 
