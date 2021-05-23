@@ -12,3 +12,7 @@ This contest was my 3rd on the platform. I had not alot of time to work on it be
 
 I made a simulation attempt based on *BFS*, but it did not work out.
 From what I read, best players were using things like *Monte Carlo Tree Search*, or even *Neural Network*.
+
+## Screenshot
+
+[Screenshot 2021-05-23 at 12.22.03.png](result)
