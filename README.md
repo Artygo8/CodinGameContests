@@ -15,4 +15,4 @@ From what I read, best players were using things like *Monte Carlo Tree Search*,
 
 ## Screenshot
 
-[Screenshot 2021-05-23 at 12.22.03.png](result)
+[CGSC2021 result](Screenshot 2021-05-23 at 12.22.03.png)
