@@ -6,6 +6,7 @@ REPO="https://github.com/Artygo8/"
 
 
 if [[ -e $FILE ]];then
+	echo $FILE >> .gitignore
 	cat $FILE |while read line; do
 		if [[ -n $line ]];then
   			echo $PREFIX$line.git
